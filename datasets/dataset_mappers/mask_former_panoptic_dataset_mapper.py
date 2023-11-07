@@ -89,9 +89,7 @@ class MaskFormerPanopticDatasetMapper(MaskFormerSemanticDatasetMapper):
 
         if pan_seg_gt is None:
             raise ValueError(
-                "Cannot find 'pan_seg_file_name' for panoptic segmentation dataset {}.".format(
-                    dataset_dict["file_name"]
-                )
+                f"""Cannot find 'pan_seg_file_name' for panoptic segmentation dataset {dataset_dict["file_name"]}."""
             )
 
         aug_input = T.AugInput(image, sem_seg=sem_seg_gt)
@@ -146,14 +144,14 @@ class MaskFormerPanopticDatasetMapper(MaskFormerSemanticDatasetMapper):
         classes = []
         masks = []
         for segment_info in segments_info:
-            class_id = segment_info["category_id"]
             if not segment_info["iscrowd"]:
+                class_id = segment_info["category_id"]
                 classes.append(class_id)
                 masks.append(pan_seg_gt == segment_info["id"])
 
         classes = np.array(classes)
         instances.gt_classes = torch.tensor(classes, dtype=torch.int64)
-        if len(masks) == 0:
+        if not masks:
             # Some image does not have annotation (all ignored)
             instances.gt_masks = torch.zeros((0, pan_seg_gt.shape[-2], pan_seg_gt.shape[-1]))
         else:

@@ -12,16 +12,12 @@ from .io_common import generate_lineidx, FileProgressingbar
 class TSVFile(object):
     def __init__(self, tsv_file, silence=True):
         self.tsv_file = tsv_file
-        self.lineidx = op.splitext(tsv_file)[0] + '.lineidx'
+        self.lineidx = f'{op.splitext(tsv_file)[0]}.lineidx'
 
-        self.label_file = op.splitext(tsv_file)[0] + '.label'
-        self.label_lineidx = op.splitext(tsv_file)[0] + '.label.lineidx'
+        self.label_file = f'{op.splitext(tsv_file)[0]}.label'
+        self.label_lineidx = f'{op.splitext(tsv_file)[0]}.label.lineidx'
 
-        if os.path.exists(self.label_file):
-            self.split_label = True
-        else:
-            self.split_label = False
-
+        self.split_label = bool(os.path.exists(self.label_file))
         self._fp = None
         self._lineidx = None
 
@@ -85,7 +81,7 @@ class TSVFile(object):
                 self._label_fp = open(self.label_file, 'r')
 
         if self.pid != os.getpid():
-            print('re-open {} because the process id changed'.format(self.tsv_file))
+            print(f're-open {self.tsv_file} because the process id changed')
             self._fp = open(self.tsv_file, 'r')
             self.pid = os.getpid()
 

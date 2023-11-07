@@ -23,9 +23,7 @@ def parse_option():
     parser = argparse.ArgumentParser('SemanticSAM Demo', add_help=False)
     parser.add_argument('--conf_files', default="configs/semantic_sam_only_sa-1b_swinL.yaml", metavar="FILE", help='path to config file', )
     parser.add_argument('--ckpt', default="", metavar="FILE", help='path to ckpt', )
-    args = parser.parse_args()
-
-    return args
+    return parser.parse_args()
 
 '''
 build args
@@ -51,18 +49,27 @@ model_sam = BaseModel(opt, build_model(opt)).from_pretrained(args.ckpt).eval().c
 
 @torch.no_grad()
 def inference(image,level=[0],*args, **kwargs):
-    if level == 'All Prompt':
-        level = [1, 2, 3, 4, 5, 6]
-    else:
-        level = [level.split(' ')[-1]]
+    level = [1, 2, 3, 4, 5, 6] if level == 'All Prompt' else [level.split(' ')[-1]]
     print(level)
     text_size, hole_scale, island_scale=640,100,100
     text, text_part, text_thresh='','','0.0'
     with torch.autocast(device_type='cuda', dtype=torch.float16):
         semantic=False
         model=model_sam
-        a= interactive_infer_image_idino_m2m_auto(model, image,level,text,text_part,text_thresh,text_size,hole_scale,island_scale,semantic, *args, **kwargs)
-        return a
+        return interactive_infer_image_idino_m2m_auto(
+            model,
+            image,
+            level,
+            text,
+            text_part,
+            text_thresh,
+            text_size,
+            hole_scale,
+            island_scale,
+            semantic,
+            *args,
+            **kwargs
+        )
 
 
 
@@ -106,10 +113,7 @@ title='''
 # Auto generation demo.
 '''
 def change_vocab(choice):
-    if choice:
-        return gr.update(visible=True)
-    else:
-        return gr.update(visible=False)
+    return gr.update(visible=True) if choice else gr.update(visible=False)
 
 
 with demo:

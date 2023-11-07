@@ -119,7 +119,7 @@ def load_lvis_json(image_root, annot_json, metadata):
             }
         )
 
-    print("Empty annotations: {}".format(cnt_empty))
+    print(f"Empty annotations: {cnt_empty}")
     assert len(ret), f"No images found in {image_root}!"
     assert PathManager.isfile(ret[0]["file_name"]), ret[0]["file_name"]
     return ret

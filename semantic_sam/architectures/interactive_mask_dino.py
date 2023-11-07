@@ -167,29 +167,40 @@ class GeneralizedMaskDINO(nn.Module):
         weight_dict = {"loss_mask_cls_0": class_weight}
         weight_dict.update({"loss_mask_bce_0": mask_weight, "loss_mask_dice_0": dice_weight})
         weight_dict.update({"loss_bbox_0":box_weight,"loss_giou_0":giou_weight})
-        weight_dict.update({"iou_score_loss_0":iou_weight})
-        weight_dict.update({"loss_mask_part_cls_0":class_weight})
+        weight_dict["iou_score_loss_0"] = iou_weight
+        weight_dict["loss_mask_part_cls_0"] = class_weight
         # two stage is the query selection scheme
         if dec_cfg['TWO_STAGE']:
             interm_weight_dict = {}
-            interm_weight_dict.update({k + f'_interm': v for k, v in weight_dict.items()})
+            interm_weight_dict.update({f'{k}_interm': v for k, v in weight_dict.items()})
             weight_dict.update(interm_weight_dict)
         # denoising training
         dn = dec_cfg['DN']
         # TODO hack for dn lable loss
-        if dn == "standard":
-            weight_dict.update({k + f"_dn": v for k, v in weight_dict.items() if k!="loss_mask" and k!="loss_dice" })
-            dn_losses=["dn_labels", "boxes"]
-        elif dn == "seg":
-            weight_dict.update({k + f"_dn": v for k, v in weight_dict.items()})
+        if dn == "seg":
+            weight_dict.update({f"{k}_dn": v for k, v in weight_dict.items()})
             dn_losses=["masks","dn_labels", "boxes"]
+        elif dn == "standard":
+            weight_dict.update(
+                {
+                    f"{k}_dn": v
+                    for k, v in weight_dict.items()
+                    if k not in ["loss_mask", "loss_dice"]
+                }
+            )
+            dn_losses=["dn_labels", "boxes"]
         else:
             dn_losses=[]
         if deep_supervision:
             dec_layers = dec_cfg['DEC_LAYERS']
             aux_weight_dict = {}
             for i in range(dec_layers):
-                aux_weight_dict.update({k.replace('_0', '_{}'.format(i+1)): v for k, v in weight_dict.items()})
+                aux_weight_dict.update(
+                    {
+                        k.replace('_0', f'_{i + 1}'): v
+                        for k, v in weight_dict.items()
+                    }
+                )
             weight_dict.update(aux_weight_dict)
         if dec_cfg['BOX']:
             losses = ["masks", "labels", "boxes"]
@@ -308,10 +319,7 @@ class GeneralizedMaskDINO(nn.Module):
                 features, None)
         outputs, mask_dict = self.sem_seg_head.predictor(multi_scale_features, mask_features, None, targets=targets,
                                      target_queries=None, target_vlp=None, task='demo', extra=prediction_switch)
-        pred_ious=None
-        if 'pred_ious' in outputs.keys():
-            pred_ious = outputs["pred_ious"]
-
+        pred_ious = outputs["pred_ious"] if 'pred_ious' in outputs.keys() else None
         mask_pred_results = outputs["pred_masks"].view(pred_ious.shape[0], pred_ious.shape[1], pred_ious.shape[2], outputs["pred_masks"].shape[-2], outputs["pred_masks"].shape[-1])
         level = torch.tensor(level).cuda()
         mask_pred_results = torch.index_select(mask_pred_results, 2, level).flatten(1, 2)
@@ -357,9 +365,10 @@ class GeneralizedMaskDINO(nn.Module):
                 self.criterion.num_classes = 1
                 data = batched_inputs if type(batched_inputs)==list else batched_inputs['sam']
                 losses_sam = self.forward_seg(data, task='sam', prediction_switch=prediction_switch)
-                new_losses_sam = {}
-                for key, value in losses_sam.items():
-                    new_losses_sam['sam.'+str(key)] = losses_sam[key]
+                new_losses_sam = {
+                    f'sam.{str(key)}': losses_sam[key]
+                    for key, value in losses_sam.items()
+                }
                 losses.update(new_losses_sam)
             return losses
         else:

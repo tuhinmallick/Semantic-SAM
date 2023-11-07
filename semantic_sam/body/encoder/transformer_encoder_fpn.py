@@ -61,10 +61,9 @@ class BasePixelDecoder(nn.Module):
                     activation=F.relu,
                 )
                 weight_init.c2_xavier_fill(output_conv)
-                self.add_module("layer_{}".format(idx + 1), output_conv)
+                self.add_module(f"layer_{idx + 1}", output_conv)
 
                 lateral_convs.append(None)
-                output_convs.append(output_conv)
             else:
                 lateral_norm = get_norm(norm, conv_dim)
                 output_norm = get_norm(norm, conv_dim)
@@ -84,11 +83,11 @@ class BasePixelDecoder(nn.Module):
                 )
                 weight_init.c2_xavier_fill(lateral_conv)
                 weight_init.c2_xavier_fill(output_conv)
-                self.add_module("adapter_{}".format(idx + 1), lateral_conv)
-                self.add_module("layer_{}".format(idx + 1), output_conv)
+                self.add_module(f"adapter_{idx + 1}", lateral_conv)
+                self.add_module(f"layer_{idx + 1}", output_conv)
 
                 lateral_convs.append(lateral_conv)
-                output_convs.append(output_conv)
+            output_convs.append(output_conv)
         # Place convs into top-down order (from low to high resolution)
         # to make the top-down computation in forward clearer.
         self.lateral_convs = lateral_convs[::-1]
@@ -111,14 +110,14 @@ class BasePixelDecoder(nn.Module):
     @classmethod
     def from_config(cls, cfg, input_shape: Dict[str, ShapeSpec]):
         enc_cfg = cfg['MODEL']['ENCODER']
-        ret = {}
-        ret["input_shape"] = {
-            k: v for k, v in input_shape.items() if k in enc_cfg['IN_FEATURES']
+        return {
+            "input_shape": {
+                k: v for k, v in input_shape.items() if k in enc_cfg['IN_FEATURES']
+            },
+            "conv_dim": enc_cfg['CONVS_DIM'],
+            "mask_dim": enc_cfg['MASK_DIM'],
+            "norm": enc_cfg['NORM'],
         }
-        ret["conv_dim"] = enc_cfg['CONVS_DIM']
-        ret["mask_dim"] = enc_cfg['MASK_DIM']
-        ret["norm"] = enc_cfg['NORM']
-        return ret
 
     def forward_features(self, features):
         multi_scale_features = []
@@ -254,8 +253,8 @@ class TransformerEncoderPixelDecoder(BasePixelDecoder):
             activation=F.relu,
         )
         weight_init.c2_xavier_fill(output_conv)
-        delattr(self, "layer_{}".format(len(self.in_features)))
-        self.add_module("layer_{}".format(len(self.in_features)), output_conv)
+        delattr(self, f"layer_{len(self.in_features)}")
+        self.add_module(f"layer_{len(self.in_features)}", output_conv)
         self.output_convs[0] = output_conv
 
     @classmethod

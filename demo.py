@@ -23,9 +23,7 @@ def parse_option():
     parser = argparse.ArgumentParser('SemanticSAM Demo', add_help=False)
     parser.add_argument('--conf_files', default="configs/semantic_sam_only_sa-1b_swinL.yaml", metavar="FILE", help='path to config file', )
     parser.add_argument('--ckpt', default="", metavar="FILE", help='path to ckpt', )
-    args = parser.parse_args()
-
-    return args
+    return parser.parse_args()
 
 '''
 build args
@@ -117,10 +115,7 @@ title='''
 # Please only click one point, or our model will take the center of all points as the clicked location. Remember to clear the click after each interaction, or we will take the center of the current click and previous ones as the clicked location.
 '''
 def change_vocab(choice):
-    if choice:
-        return gr.update(visible=True)
-    else:
-        return gr.update(visible=False)
+    return gr.update(visible=True) if choice else gr.update(visible=False)
 
 
 with demo:

@@ -36,10 +36,12 @@ def load_sam_instances(name: str, dirname: str, id_range: tuple):
     return dicts
 
 def register_sam(name, dirname, id_range):
-    DatasetCatalog.register("{}".format(name), lambda: load_sam_instances(name, dirname, id_range))
-    MetadataCatalog.get("{}".format(name)).set(
+    DatasetCatalog.register(
+        f"{name}", lambda: load_sam_instances(name, dirname, id_range)
+    )
+    MetadataCatalog.get(f"{name}").set(
         dirname=dirname,
-        evaluator_type = "sam_interactive",
+        evaluator_type="sam_interactive",
         thing_dataset_id_to_contiguous_id={},
     )
 

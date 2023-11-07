@@ -40,7 +40,7 @@ class TransformerDecoder(nn.Module):
         self.return_intermediate = return_intermediate
         assert return_intermediate, "support return_intermediate only"
         self.query_dim = query_dim
-        assert query_dim in [2, 4], "query_dim should be 2/4 but {}".format(query_dim)
+        assert query_dim in [2, 4], f"query_dim should be 2/4 but {query_dim}"
         self.num_feature_levels = num_feature_levels
 
         self.ref_point_head = MLP(query_dim // 2 * d_model, d_model, d_model, 2)
@@ -53,7 +53,6 @@ class TransformerDecoder(nn.Module):
             self.query_scale = None
         else:
             raise NotImplementedError
-            self.query_scale = MLP(d_model, d_model, d_model, 2)
         self.bbox_embed = None
         self.class_embed = None
 
@@ -290,7 +289,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
             elif self.key_aware_type == 'proj_mean':
                 tgt = tgt + self.key_aware_proj(memory).mean(0, keepdim=True)
             else:
-                raise NotImplementedError("Unknown key_aware_type: {}".format(self.key_aware_type))
+                raise NotImplementedError(f"Unknown key_aware_type: {self.key_aware_type}")
         tgt2 = self.cross_attn(self.with_pos_embed(tgt, tgt_query_pos).transpose(0, 1),
                                tgt_reference_points.transpose(0, 1).contiguous(),
                                memory.transpose(0, 1), memory_spatial_shapes, memory_level_start_index,

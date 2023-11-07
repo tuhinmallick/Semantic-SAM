@@ -8,5 +8,4 @@ def build_semantic_sam_head(config, *args, **kwargs):
     if not is_model(model_name):
         raise ValueError(f'Unkown model: {model_name}')
 
-    body = model_entrypoints(model_name)(config, *args, **kwargs)
-    return body
+    return model_entrypoints(model_name)(config, *args, **kwargs)

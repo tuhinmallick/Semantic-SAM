@@ -934,11 +934,10 @@ def _get_ade20k_full_meta():
     stuff_dataset_id_to_contiguous_id = {k: i for i, k in enumerate(stuff_ids)}
     stuff_classes = [k["name"] for k in ADE20K_SEM_SEG_FULL_CATEGORIES]
 
-    ret = {
+    return {
         "stuff_dataset_id_to_contiguous_id": stuff_dataset_id_to_contiguous_id,
         "stuff_classes": stuff_classes,
     }
-    return ret
 
 
 # def register_all_ade20k_full(root):

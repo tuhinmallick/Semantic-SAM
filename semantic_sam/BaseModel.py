@@ -16,8 +16,7 @@ class BaseModel(nn.Module):
         self.model = module
 
     def forward(self, *inputs, **kwargs):
-        outputs = self.model(*inputs, **kwargs)
-        return outputs
+        return self.model(*inputs, **kwargs)
 
     def save_pretrained(self, save_dir):
         torch.save(self.model.state_dict(), save_path)

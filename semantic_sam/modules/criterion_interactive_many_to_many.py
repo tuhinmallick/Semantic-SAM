@@ -51,8 +51,7 @@ def sigmoid_focal_loss(inputs, targets, num_boxes, alpha: float = 0.25, gamma: f
     return loss.mean(1).sum() / num_boxes
 
 def iou_score_loss(inputs, targets):
-    ce_loss = F.mse_loss(inputs, targets, reduction="none")
-    return ce_loss
+    return F.mse_loss(inputs, targets, reduction="none")
 
 def dice_loss(
         inputs: torch.Tensor,
@@ -72,12 +71,7 @@ def dice_loss(
     inputs = inputs.flatten(1)
     numerator = 2 * (inputs * targets).sum(-1)
     denominator = inputs.sum(-1) + targets.sum(-1)
-    loss = 1 - (numerator + 1) / (denominator + 1)
-    # only match the lowest loss
-    # loss = loss.view(-1, 3)
-    # loss = loss.min(1)[0]
-    # return loss.sum() / num_masks
-    return loss
+    return 1 - (numerator + 1) / (denominator + 1)
 
 dice_loss_jit = torch.jit.script(
     dice_loss
@@ -176,9 +170,7 @@ class SetCriterionOsPartWholeM2M(nn.Module):
         assert "pred_logits" in outputs
         if indices is None or len(targets) == 0:
             loss_ce = outputs['pred_logits'].sum() * 0.0
-            losses = {"loss_mask_cls_0": loss_ce}
-            return losses
-
+            return {"loss_mask_cls_0": loss_ce}
         src_logits = outputs["pred_logits"].type(self.empty_weight.dtype)
 
         idx = self._get_src_permutation_idx(indices)
@@ -189,8 +181,7 @@ class SetCriterionOsPartWholeM2M(nn.Module):
         target_classes[idx] = target_classes_o
 
         loss_ce = F.cross_entropy(src_logits.transpose(1, 2), target_classes, self.empty_weight)
-        losses = {"loss_mask_cls_0": loss_ce}
-        return losses
+        return {"loss_mask_cls_0": loss_ce}
 
     def loss_labels_masked(self, outputs, targets, indices, num_boxes, log=True, layer_id=None, extra=None):
         """Classification loss (Binary focal loss)
@@ -201,9 +192,7 @@ class SetCriterionOsPartWholeM2M(nn.Module):
         assert 'pred_logits' in outputs
         if indices is None or len(targets) == 0:
             loss_ce = outputs['pred_logits'].sum() * 0.0
-            losses = {"loss_mask_cls_0": loss_ce}
-            return losses
-
+            return {"loss_mask_cls_0": loss_ce}
         src_logits = outputs['pred_logits']
 
         idx = self._get_src_permutation_idx(indices)
@@ -218,9 +207,7 @@ class SetCriterionOsPartWholeM2M(nn.Module):
 
         target_classes_onehot = target_classes_onehot[:,:,:-1]
         loss_ce = sigmoid_focal_loss(src_logits[idx], target_classes_onehot[idx], num_boxes, alpha=self.focal_alpha, gamma=2) * src_logits.shape[1]
-        losses = {'loss_mask_cls_0': loss_ce}
-
-        return losses
+        return {'loss_mask_cls_0': loss_ce}
 
     def loss_labels(self, outputs, targets, indices, num_boxes, layer_id=None, log=True, key='gt_whole_classes', extra=None):
         """Classification loss (Binary focal loss)
@@ -229,13 +216,12 @@ class SetCriterionOsPartWholeM2M(nn.Module):
         if self.prediction_switch is None or 'whole' not in self.prediction_switch.keys():
             if 'labels' in targets[0].keys():
                 key = 'labels'
-        else:
-            if not self.prediction_switch['whole']:
-                return {"fake_no_loss_mask_cls_0": 0.0}
-            elif key not in targets[0].keys():
-                # FIXME only consider batchsize=1 case
-                assert len(targets) == 1
-                return {"loss_mask_cls_0": 0.0 * outputs['pred_logits'].sum()}
+        elif not self.prediction_switch['whole']:
+            return {"fake_no_loss_mask_cls_0": 0.0}
+        elif key not in targets[0].keys():
+            # FIXME only consider batchsize=1 case
+            assert len(targets) == 1
+            return {"loss_mask_cls_0": 0.0 * outputs['pred_logits'].sum()}
         assert False, "not implemented"
         # src_logits = outputs['pred_logits']
 
@@ -251,10 +237,8 @@ class SetCriterionOsPartWholeM2M(nn.Module):
 
         target_classes_onehot = target_classes_onehot[:, :, :-1]
         loss_ce = sigmoid_focal_loss(src_logits, target_classes_onehot, num_boxes, alpha=self.focal_alpha, gamma=2) * \
-                  src_logits.shape[1]
-        losses = {"loss_mask_cls_0": loss_ce}
-
-        return losses
+                      src_logits.shape[1]
+        return {"loss_mask_cls_0": loss_ce}
 
     def loss_labels_part(self, outputs, targets, indices, num_boxes, layer_id=None, log=True, key='gt_part_classes', extra=None):
         """Classification loss (Binary focal loss)
@@ -282,9 +266,7 @@ class SetCriterionOsPartWholeM2M(nn.Module):
 
         target_classes_onehot = target_classes_onehot[:,:,:-1]
         loss_ce = sigmoid_focal_loss(src_logits, target_classes_onehot, num_boxes, alpha=self.focal_alpha, gamma=2) * src_logits.shape[1]
-        losses = {"loss_mask_part_cls_0": loss_ce}
-
-        return losses
+        return {"loss_mask_part_cls_0": loss_ce}
 
     def loss_boxes(self, outputs, targets, indices, num_boxes, layer_id=None, extra=None):
         """Compute the losses related to the bounding boxes, the L1 regression loss and the GIoU loss
@@ -296,8 +278,7 @@ class SetCriterionOsPartWholeM2M(nn.Module):
         assert 'pred_boxes' in outputs
         if indices is None or len(targets) == 0:
             loss = outputs['pred_boxes'].sum() * 0.0
-            losses = {"loss_bbox_0": loss, "loss_giou_0": loss}
-            return losses
+            return {"loss_bbox_0": loss, "loss_giou_0": loss}
         assert len(targets)==1, "not support multi batch training"
         idx = self._get_src_permutation_idx(indices)
         src_boxes = outputs['pred_boxes'][idx]
@@ -309,9 +290,7 @@ class SetCriterionOsPartWholeM2M(nn.Module):
         # target_boxes = torch.cat([t['boxes'][i] for t, (_, i) in zip(targets, indices)], dim=0)
 
         loss_bbox = F.l1_loss(src_boxes, target_boxes, reduction='none')
-        losses = {}
-        losses['loss_bbox_0'] = loss_bbox.sum() / num_boxes
-
+        losses = {'loss_bbox_0': loss_bbox.sum() / num_boxes}
         loss_giou = 1 - torch.diag(box_ops.generalized_box_iou(
             box_ops.box_cxcywh_to_xyxy(src_boxes),
             box_ops.box_cxcywh_to_xyxy(target_boxes)))
@@ -328,9 +307,7 @@ class SetCriterionOsPartWholeM2M(nn.Module):
         assert "pred_masks" in outputs
         if indices is None or len(targets) == 0:
             loss = outputs['pred_masks'].sum() * 0.0
-            losses = {"loss_mask_bce_0": loss, "loss_mask_dice_0": loss}
-            return losses
-
+            return {"loss_mask_bce_0": loss, "loss_mask_dice_0": loss}
         src_idx = self._get_src_permutation_idx(indices)
         tgt_idx = self._get_tgt_permutation_idx(indices)
         src_masks = outputs["pred_masks"]

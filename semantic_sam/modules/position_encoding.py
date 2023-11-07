@@ -48,16 +48,15 @@ class PositionEmbeddingSine(nn.Module):
         pos_y = torch.stack(
             (pos_y[:, :, :, 0::2].sin(), pos_y[:, :, :, 1::2].cos()), dim=4
         ).flatten(3)
-        pos = torch.cat((pos_y, pos_x), dim=3).permute(0, 3, 1, 2)
-        return pos
+        return torch.cat((pos_y, pos_x), dim=3).permute(0, 3, 1, 2)
     
     def __repr__(self, _repr_indent=4):
-        head = "Positional encoding " + self.__class__.__name__
+        head = f"Positional encoding {self.__class__.__name__}"
         body = [
-            "num_pos_feats: {}".format(self.num_pos_feats),
-            "temperature: {}".format(self.temperature),
-            "normalize: {}".format(self.normalize),
-            "scale: {}".format(self.scale),
+            f"num_pos_feats: {self.num_pos_feats}",
+            f"temperature: {self.temperature}",
+            f"normalize: {self.normalize}",
+            f"scale: {self.scale}",
         ]
         # _repr_indent = 4
         lines = [head] + [" " * _repr_indent + line for line in body]

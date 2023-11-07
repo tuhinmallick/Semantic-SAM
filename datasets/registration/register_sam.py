@@ -53,11 +53,10 @@ def _get_sam_instances_meta():
     # Mapping from the incontiguous ADE category id to an id in [0, 99]
     thing_dataset_id_to_contiguous_id = {k: i for i, k in enumerate(thing_ids)}
     thing_classes = [k["name"] for k in SAM_CATEGORIES]
-    ret = {
+    return {
         "thing_dataset_id_to_contiguous_id": thing_dataset_id_to_contiguous_id,
         "thing_classes": thing_classes,
     }
-    return ret
 
 def load_sam_index(tsv_file, dataset_name=None, extra_annotation_keys=None):
     """
@@ -76,13 +75,13 @@ def load_sam_index(tsv_file, dataset_name=None, extra_annotation_keys=None):
         files = [f for f in files if '.tsv' in f and int(f.split('.')[0].split('-')[-1])>=start and int(f.split('.')[0].split('-')[-1])<end]
     # _root_local = os.getenv("SAM_LOCAL", "no")
     # azcopy = _root_local!='no'
-        
+
     for tsv in files:
         if op.splitext(tsv)[1] == '.tsv':
             print('register tsv to create index', "tsv_id", tsv_id, tsv)
-            lineidx = os.path.join(tsv_file, op.splitext(tsv)[0] + '.lineidx')
-            line_name = op.splitext(tsv)[0] + '.lineidx'
-            
+            lineidx = os.path.join(tsv_file, f'{op.splitext(tsv)[0]}.lineidx')
+            line_name = f'{op.splitext(tsv)[0]}.lineidx'
+
             with open(lineidx, 'r') as fp:
                 lines = fp.readlines()
                 _lineidx = [int(i.strip().split()[0]) for i in lines]

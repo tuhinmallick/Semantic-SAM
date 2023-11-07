@@ -25,8 +25,7 @@ def prepare_image(image_pth):
     apply transformation to the image. crop the image ot 640 short edge by default
     """
     image = Image.open(image_pth).convert('RGB')
-    t = []
-    t.append(transforms.Resize(640, interpolation=Image.BICUBIC))
+    t = [transforms.Resize(640, interpolation=Image.BICUBIC)]
     transform1 = transforms.Compose(t)
     image_ori = transform1(image)
 
@@ -45,8 +44,7 @@ def build_semantic_sam(model_type, ckpt):
 
     sam_cfg=cfgs[model_type]
     opt = load_opt_from_config_file(sam_cfg)
-    model_semantic_sam = BaseModel(opt, build_model(opt)).from_pretrained(ckpt).eval().cuda()
-    return model_semantic_sam
+    return BaseModel(opt, build_model(opt)).from_pretrained(ckpt).eval().cuda()
 
 
 def plot_results(outputs, image_ori, save_path='../vis/'):

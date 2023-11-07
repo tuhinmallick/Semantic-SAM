@@ -129,65 +129,7 @@ def multi_head_attention_forward(
     assert head_dim * num_heads == embed_dim, "embed_dim must be divisible by num_heads"
     scaling = float(head_dim) ** -0.5
 
-    if not use_separate_proj_weight:
-        if (query is key or torch.equal(query, key)) and (key is value or torch.equal(key, value)):
-            # self-attention
-            q, k, v = linear(query, in_proj_weight, in_proj_bias).chunk(3, dim=-1)
-
-        elif key is value or torch.equal(key, value):
-            # encoder-decoder attention
-            # This is inline in_proj function with in_proj_weight and in_proj_bias
-            _b = in_proj_bias
-            _start = 0
-            _end = embed_dim
-            _w = in_proj_weight[_start:_end, :]
-            if _b is not None:
-                _b = _b[_start:_end]
-            q = linear(query, _w, _b)
-
-            if key is None:
-                assert value is None
-                k = None
-                v = None
-            else:
-
-                # This is inline in_proj function with in_proj_weight and in_proj_bias
-                _b = in_proj_bias
-                _start = embed_dim
-                _end = None
-                _w = in_proj_weight[_start:, :]
-                if _b is not None:
-                    _b = _b[_start:]
-                k, v = linear(key, _w, _b).chunk(2, dim=-1)
-
-        else:
-            # This is inline in_proj function with in_proj_weight and in_proj_bias
-            _b = in_proj_bias
-            _start = 0
-            _end = embed_dim
-            _w = in_proj_weight[_start:_end, :]
-            if _b is not None:
-                _b = _b[_start:_end]
-            q = linear(query, _w, _b)
-
-            # This is inline in_proj function with in_proj_weight and in_proj_bias
-            _b = in_proj_bias
-            _start = embed_dim
-            _end = embed_dim * 2
-            _w = in_proj_weight[_start:_end, :]
-            if _b is not None:
-                _b = _b[_start:_end]
-            k = linear(key, _w, _b)
-
-            # This is inline in_proj function with in_proj_weight and in_proj_bias
-            _b = in_proj_bias
-            _start = embed_dim * 2
-            _end = None
-            _w = in_proj_weight[_start:, :]
-            if _b is not None:
-                _b = _b[_start:]
-            v = linear(value, _w, _b)
-    else:
+    if use_separate_proj_weight:
         q_proj_weight_non_opt = torch.jit._unwrap_optional(q_proj_weight)
         len1, len2 = q_proj_weight_non_opt.size()
         assert len1 == embed_dim and len2 == query.size(-1)
@@ -201,23 +143,80 @@ def multi_head_attention_forward(
         assert len1 == embed_dim and len2 == value.size(-1)
 
         if in_proj_bias is not None:
-            q = linear(query, q_proj_weight_non_opt, in_proj_bias[0:embed_dim])
+            q = linear(query, q_proj_weight_non_opt, in_proj_bias[:embed_dim])
             k = linear(key, k_proj_weight_non_opt, in_proj_bias[embed_dim : (embed_dim * 2)])
             v = linear(value, v_proj_weight_non_opt, in_proj_bias[(embed_dim * 2) :])
         else:
             q = linear(query, q_proj_weight_non_opt, in_proj_bias)
             k = linear(key, k_proj_weight_non_opt, in_proj_bias)
             v = linear(value, v_proj_weight_non_opt, in_proj_bias)
+    elif (query is key or torch.equal(query, key)) and (key is value or torch.equal(key, value)):
+        # self-attention
+        q, k, v = linear(query, in_proj_weight, in_proj_bias).chunk(3, dim=-1)
+
+    elif key is value or torch.equal(key, value):
+        # encoder-decoder attention
+        # This is inline in_proj function with in_proj_weight and in_proj_bias
+        _b = in_proj_bias
+        _start = 0
+        _end = embed_dim
+        _w = in_proj_weight[_start:_end, :]
+        if _b is not None:
+            _b = _b[_start:_end]
+        q = linear(query, _w, _b)
+
+        if key is None:
+            assert value is None
+            k = None
+            v = None
+        else:
+
+            # This is inline in_proj function with in_proj_weight and in_proj_bias
+            _b = in_proj_bias
+            _start = embed_dim
+            _end = None
+            _w = in_proj_weight[_start:, :]
+            if _b is not None:
+                _b = _b[_start:]
+            k, v = linear(key, _w, _b).chunk(2, dim=-1)
+
+    else:
+        # This is inline in_proj function with in_proj_weight and in_proj_bias
+        _b = in_proj_bias
+        _start = 0
+        _end = embed_dim
+        _w = in_proj_weight[_start:_end, :]
+        if _b is not None:
+            _b = _b[_start:_end]
+        q = linear(query, _w, _b)
+
+        # This is inline in_proj function with in_proj_weight and in_proj_bias
+        _b = in_proj_bias
+        _start = embed_dim
+        _end = embed_dim * 2
+        _w = in_proj_weight[_start:_end, :]
+        if _b is not None:
+            _b = _b[_start:_end]
+        k = linear(key, _w, _b)
+
+        # This is inline in_proj function with in_proj_weight and in_proj_bias
+        _b = in_proj_bias
+        _start = embed_dim * 2
+        _end = None
+        _w = in_proj_weight[_start:, :]
+        if _b is not None:
+            _b = _b[_start:]
+        v = linear(value, _w, _b)
     q = q * scaling
 
     if attn_mask is not None:
-        assert (
-            attn_mask.dtype == torch.float32
-            or attn_mask.dtype == torch.float64
-            or attn_mask.dtype == torch.float16
-            or attn_mask.dtype == torch.uint8
-            or attn_mask.dtype == torch.bool
-        ), "Only float, byte, and bool types are supported for attn_mask, not {}".format(attn_mask.dtype)
+        assert attn_mask.dtype in [
+            torch.float32,
+            torch.float64,
+            torch.float16,
+            torch.uint8,
+            torch.bool,
+        ], f"Only float, byte, and bool types are supported for attn_mask, not {attn_mask.dtype}"
         if attn_mask.dtype == torch.uint8:
             warnings.warn("Byte tensor for attn_mask in nn.MultiheadAttention is deprecated. Use bool tensor instead.")
             attn_mask = attn_mask.to(torch.bool)
@@ -230,8 +229,8 @@ def multi_head_attention_forward(
             if list(attn_mask.size()) != [bsz * num_heads, query.size(0), key.size(0)]:
                 raise RuntimeError("The size of the 3D attn_mask is not correct.")
         else:
-            raise RuntimeError("attn_mask's dimension {} is not supported".format(attn_mask.dim()))
-        # attn_mask's dim is 3 now.
+            raise RuntimeError(f"attn_mask's dimension {attn_mask.dim()} is not supported")
+            # attn_mask's dim is 3 now.
 
     # convert ByteTensor key_padding_mask to bool
     if key_padding_mask is not None and key_padding_mask.dtype == torch.uint8:
@@ -240,17 +239,21 @@ def multi_head_attention_forward(
         )
         key_padding_mask = key_padding_mask.to(torch.bool)
 
-    if bias_k is not None and bias_v is not None:
-        if static_k is None and static_v is None:
-            k = torch.cat([k, bias_k.repeat(1, bsz, 1)])
-            v = torch.cat([v, bias_v.repeat(1, bsz, 1)])
-            if attn_mask is not None:
-                attn_mask = pad(attn_mask, (0, 1))
-            if key_padding_mask is not None:
-                key_padding_mask = pad(key_padding_mask, (0, 1))
-        else:
-            assert static_k is None, "bias cannot be added to static key."
-            assert static_v is None, "bias cannot be added to static value."
+    if (
+        bias_k is not None
+        and bias_v is not None
+        and static_k is None
+        and static_v is None
+    ):
+        k = torch.cat([k, bias_k.repeat(1, bsz, 1)])
+        v = torch.cat([v, bias_v.repeat(1, bsz, 1)])
+        if attn_mask is not None:
+            attn_mask = pad(attn_mask, (0, 1))
+        if key_padding_mask is not None:
+            key_padding_mask = pad(key_padding_mask, (0, 1))
+    elif bias_k is not None and bias_v is not None:
+        assert static_k is None, "bias cannot be added to static key."
+        assert static_v is None, "bias cannot be added to static value."
     else:
         assert bias_k is None
         assert bias_v is None
@@ -311,12 +314,11 @@ def multi_head_attention_forward(
     attn_output = attn_output.transpose(0, 1).contiguous().view(tgt_len, bsz, embed_dim)
     attn_output = linear(attn_output, out_proj_weight, out_proj_bias)
 
-    if need_weights:
-        # average attention weights over heads
-        attn_output_weights = attn_output_weights.view(bsz, num_heads, tgt_len, src_len)
-        return attn_output, attn_output_weights.sum(dim=1) / num_heads
-    else:
+    if not need_weights:
         return attn_output, None
+    # average attention weights over heads
+    attn_output_weights = attn_output_weights.view(bsz, num_heads, tgt_len, src_len)
+    return attn_output, attn_output_weights.sum(dim=1) / num_heads
 
 
 # This class exists solely for Transformer; it has an annotation stating

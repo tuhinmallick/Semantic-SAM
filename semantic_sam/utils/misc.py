@@ -28,8 +28,7 @@ def get_iou(gt_masks, pred_masks, ignore_label=-1):
     n,h,w = gt_masks.shape
     intersection = ((gt_masks & pred_masks) & rev_ignore_mask).reshape(n,h*w).sum(dim=-1)
     union = ((gt_masks | pred_masks) & rev_ignore_mask).reshape(n,h*w).sum(dim=-1)
-    ious = (intersection / union)
-    return ious
+    return (intersection / union)
 
 def _max_by_axis(the_list):
     # type: (List[List[int]]) -> List[int]
@@ -167,11 +166,7 @@ def _onnx_nested_tensor_from_tensor_list(tensor_list: List[Tensor]) -> NestedTen
     return NestedTensor(tensor, mask=mask)
 
 def is_dist_avail_and_initialized():
-    if not dist.is_available():
-        return False
-    if not dist.is_initialized():
-        return False
-    return True
+    return False if not dist.is_available() else bool(dist.is_initialized())
 
 
 def get_class_names(name, background=True):
@@ -234,7 +229,7 @@ def get_class_names(name, background=True):
     elif name == 'bdd10k_40_panoptic_val':
         class_names = BDD_PANO
     else:
-        assert False, "text dataset name {} is not defined".format(name)
+        assert False, f"text dataset name {name} is not defined"
 
     if background == False and "background" in class_names:
         class_names.pop(class_names.index("background"))

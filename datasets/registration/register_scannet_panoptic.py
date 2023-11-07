@@ -142,7 +142,6 @@ _PREDEFINED_SPLITS_SCANNET_PANOPTIC = {
 
 
 def get_metadata():
-    meta = {}
     # The following metadata maps contiguous id from [0, #thing categories +
     # #stuff categories) to their names and colors. We have to replica of the
     # same name and color under "thing_*" and "stuff_*" because the current
@@ -154,11 +153,12 @@ def get_metadata():
     stuff_classes = [k["name"] for k in SCANNET_20_CATEGORIES]
     stuff_colors = [k["color"] for k in SCANNET_20_CATEGORIES]
 
-    meta["thing_classes"] = thing_classes
-    meta["thing_colors"] = thing_colors
-    meta["stuff_classes"] = stuff_classes
-    meta["stuff_colors"] = stuff_colors
-
+    meta = {
+        "thing_classes": thing_classes,
+        "thing_colors": thing_colors,
+        "stuff_classes": stuff_classes,
+        "stuff_colors": stuff_colors,
+    }
     # Convert category id for training:
     #   category id: like semantic segmentation, it is the class id for each
     #   pixel. Since there are some classes not used in evaluation, the category

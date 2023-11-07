@@ -49,11 +49,11 @@ def convert_coco_poly_to_mask(segmentations, height, width):
         mask = torch.as_tensor(mask, dtype=torch.uint8)
         mask = mask.any(dim=2)
         masks.append(mask)
-    if masks:
-        masks = torch.stack(masks, dim=0)
-    else:
-        masks = torch.zeros((0, height, width), dtype=torch.uint8)
-    return masks
+    return (
+        torch.stack(masks, dim=0)
+        if masks
+        else torch.zeros((0, height, width), dtype=torch.uint8)
+    )
 
 def build_transform_gen(cfg, is_train):
     """
@@ -117,13 +117,12 @@ class SamBaselineDatasetMapper:
     ):
         self.augmentation = augmentation
         logging.getLogger(__name__).info(
-            "[COCO_Instance_LSJ_Augment_Dataset_Mapper] Full TransformGens used in training: {}".format(str(self.augmentation))
+            f"[COCO_Instance_LSJ_Augment_Dataset_Mapper] Full TransformGens used in training: {str(self.augmentation)}"
         )
         _root = os.getenv("SAM_DATASETS", "no")
         if _root!='no':
             totoal_images = 0
             if is_train:
-                self.current_tsv_id = -1
                 tsv_file = f"{_root}/"
                 self.tsv = {}
                 print("start dataset mapper, get tsv_file from ", tsv_file)
@@ -144,7 +143,6 @@ class SamBaselineDatasetMapper:
                     totoal_images += self.tsv[i].num_rows()
                 print('totoal_images', totoal_images)
             else:
-                self.current_tsv_id = -1
                 tsv_file = f"{_root}"
                 self.tsv = {}
                 files = os.listdir(tsv_file)
@@ -153,6 +151,7 @@ class SamBaselineDatasetMapper:
                 for i, tsv in enumerate(files):
                     if tsv.split('.')[-1] == 'tsv':
                         self.tsv[i] = TSVFile(f"{_root}/{tsv}")
+            self.current_tsv_id = -1
         else:
             if self.is_train:
                 assert not self.is_train, 'can not train without SA-1B datasets, please export'
@@ -167,22 +166,17 @@ class SamBaselineDatasetMapper:
         # Build augmentation
         tfm_gens = build_transform_gen(cfg, is_train)
 
-        ret = {
+        return {
             "is_train": is_train,
             "augmentation": tfm_gens,
             "image_format": cfg['INPUT']['FORMAT'],
         }
-        return ret
     
     def read_img(self, row):
-        img = img_from_base64(row[-1])
-        # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        # img = Image.fromarray(img)
-        return img
+        return img_from_base64(row[-1])
 
     def read_json(self, row):
-        anno=json.loads(row[1])
-        return anno
+        return json.loads(row[1])
 
     def __call__(self, idx_dict):
         """

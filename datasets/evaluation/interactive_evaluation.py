@@ -130,7 +130,9 @@ class InteractiveEvaluator(DatasetEvaluator):
             assert len(value) == num_samples
             pred_noc[key] = sum(value)*1.0/len(value)
 
-        pred_noc['iou_max_iter'] = sum([x.item() for x in iou_before_max_gather]) / num_samples
+        pred_noc['iou_max_iter'] = (
+            sum(x.item() for x in iou_before_max_gather) / num_samples
+        )
         return pred_noc
 
     def evaluate(self):

@@ -98,20 +98,15 @@ class LVISDatasetMapper:
         self.pixel_std = torch.tensor(std)[:,None,None]
         self.max_grounding_num = max_len
 
-        t = []
-        t.append(transforms.Resize(self.min_size_test, interpolation=Image.BICUBIC))
+        t = [transforms.Resize(self.min_size_test, interpolation=Image.BICUBIC)]
         self.transform = transforms.Compose(t)
         self.categories = torch.load(MetadataCatalog.get('logistic').get('cat_root'))
 
     @classmethod
     def from_config(cls, cfg, is_train=True):
         # Build augmentation
-        if is_train:
-            tfm_gens = build_transform_gen(cfg, is_train)
-        else:
-            tfm_gens = None
-
-        ret = {
+        tfm_gens = build_transform_gen(cfg, is_train) if is_train else None
+        return {
             "is_train": is_train,
             "tfm_gens": tfm_gens,
             "image_format": cfg['INPUT']['FORMAT'],
@@ -121,7 +116,6 @@ class LVISDatasetMapper:
             "std": cfg['INPUT']['PIXEL_STD'],
             "max_len": cfg['MODEL']['DECODER']['GROUNDING']['MAX_LEN'],
         }
-        return ret
 
     def __call__(self, dataset_dict):
         """

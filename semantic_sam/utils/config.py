@@ -101,13 +101,9 @@ def _called_with_cfg(*args, **kwargs):
     from omegaconf import DictConfig, OmegaConf, ListConfig
     # from detectron2.config import LazyConfig
 
-    if len(args) and (isinstance(args[0], (dict)) or (isinstance(args[0], (DictConfig)))):
+    if len(args) and (isinstance(args[0], (dict, DictConfig))):
         return True
-    if isinstance(kwargs.pop("cfg", None), (dict)):
-        return True
-    # `from_config`'s first argument is forced to be "cfg".
-    # So the above check covers all cases.
-    return False
+    return isinstance(kwargs.pop("cfg", None), dict)
 
 def _get_args_from_config(from_config_func, *args, **kwargs):
     """
@@ -132,10 +128,11 @@ def _get_args_from_config(from_config_func, *args, **kwargs):
     else:
         # forward supported arguments to from_config
         supported_arg_names = set(signature.parameters.keys())
-        extra_kwargs = {}
-        for name in list(kwargs.keys()):
-            if name not in supported_arg_names:
-                extra_kwargs[name] = kwargs.pop(name)
+        extra_kwargs = {
+            name: kwargs.pop(name)
+            for name in list(kwargs.keys())
+            if name not in supported_arg_names
+        }
         ret = from_config_func(*args, **kwargs)
         # forward the other arguments to __init__
         ret.update(extra_kwargs)

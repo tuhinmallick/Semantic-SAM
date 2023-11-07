@@ -96,7 +96,7 @@ def gen_sineembed_for_position(pos_tensor, dim=128):
 
         pos = torch.cat((pos_y, pos_x, pos_w, pos_h), dim=2)
     else:
-        raise ValueError("Unknown pos_tensor shape(-1):{}".format(pos_tensor.size(-1)))
+        raise ValueError(f"Unknown pos_tensor shape(-1):{pos_tensor.size(-1)}")
     return pos
 
 
@@ -118,6 +118,6 @@ def _get_activation_fn(activation):
 def _get_clones(module, N, layer_share=False):
 
     if layer_share:
-        return nn.ModuleList([module for i in range(N)])
+        return nn.ModuleList([module for _ in range(N)])
     else:
-        return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
+        return nn.ModuleList([copy.deepcopy(module) for _ in range(N)])

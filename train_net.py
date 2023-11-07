@@ -150,7 +150,7 @@ class Trainer(DefaultTrainer):
         """
         model = BaseModel(cfg, build_model(cfg)).cuda()
         logger = logging.getLogger(__name__)
-        logger.info("Model:\n{}".format(model))
+        logger.info(f"Model:\n{model}")
         return model
 
     @classmethod
@@ -163,9 +163,7 @@ class Trainer(DefaultTrainer):
 
     @classmethod
     def build_test_loader(cls, cfg, dataset_name):
-        # import ipdb; ipdb.set_trace()
-        loader = build_eval_dataloader(cfg, )
-        return loader
+        return build_eval_dataloader(cfg, )
 
     @classmethod
     def build_lr_scheduler(cls, cfg, optimizer):
@@ -272,7 +270,7 @@ class Trainer(DefaultTrainer):
             CfgNode: a new config. Same as original if ``cfg.SOLVER.REFERENCE_WORLD_SIZE==0``.
         """
         old_world_size = cfg.SOLVER.REFERENCE_WORLD_SIZE
-        if old_world_size == 0 or old_world_size == num_workers:
+        if old_world_size in [0, num_workers]:
             return cfg
         cfg = copy.deepcopy(cfg)
         # frozen = cfg.is_frozen()
@@ -307,7 +305,7 @@ class Trainer(DefaultTrainer):
         dataset_names = cfg['DATASETS']['TEST']
         model = model.eval().cuda()
         model_without_ddp = model
-        if not type(model) == BaseModel:
+        if type(model) != BaseModel:
             model_without_ddp = model.module
 
         for dataloader, dataset_name in zip(dataloaders, dataset_names):
@@ -316,11 +314,7 @@ class Trainer(DefaultTrainer):
             evaluator.reset()
             with torch.no_grad():
                 # setup task
-                if 'sam' in dataset_names:
-                    task = 'multi_granularity'
-                else:
-                    task = 'interactive'
-
+                task = 'multi_granularity' if 'sam' in dataset_names else 'interactive'
                 hook_switcher(model_without_ddp, dataset_name)
                 # setup timer
                 total = len(dataloader)
@@ -425,7 +419,7 @@ if __name__ == "__main__":
     parser.add_argument('--lang_weight', type=str, default='')
     args = parser.parse_args()
     port = random.randint(1000, 20000)
-    args.dist_url = 'tcp://127.0.0.1:' + str(port)
+    args.dist_url = f'tcp://127.0.0.1:{port}'
     print("Command Line Args:", args)
     print("pwd:", os.getcwd())
 

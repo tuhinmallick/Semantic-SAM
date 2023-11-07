@@ -101,7 +101,7 @@ class IMaskDINODecoder(nn.Module):
         self.total_num_feature_levels = total_num_feature_levels
 
         self.num_queries = num_queries
-        
+
         self.semantic_ce_loss = semantic_ce_loss
         interactive_only = True
         # learnable query features
@@ -149,10 +149,10 @@ class IMaskDINODecoder(nn.Module):
         self._bbox_embed = _bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3)
         nn.init.constant_(_bbox_embed.layers[-1].weight.data, 0)
         nn.init.constant_(_bbox_embed.layers[-1].bias.data, 0)
-        box_embed_layerlist = [_bbox_embed for i in range(self.num_layers)]  # share box prediction each layer
+        box_embed_layerlist = [_bbox_embed for _ in range(self.num_layers)]
         self.bbox_embed = nn.ModuleList(box_embed_layerlist)
         self.decoder.bbox_embed = self.bbox_embed
-        
+
         # whole category classification
         self.class_embed = nn.Parameter(torch.empty(hidden_dim, dim_proj))
         trunc_normal_(self.class_embed, std=.02)
@@ -170,17 +170,17 @@ class IMaskDINODecoder(nn.Module):
         self.mask_tokens = nn.Embedding(self.num_mask_tokens, hidden_dim)
         self.pb_embedding=nn.Embedding(2,hidden_dim)
         self.label_enc=nn.Embedding(2,hidden_dim)
-        
+
         self.prediction_switch = None
 
 
     @classmethod
     def from_config(cls, cfg, in_channels, lang_encoder, mask_classification, extra):
-        ret = {}
-        ret["in_channels"] = in_channels
-        ret["lang_encoder"] = lang_encoder
-        ret["mask_classification"] = mask_classification
-
+        ret = {
+            "in_channels": in_channels,
+            "lang_encoder": lang_encoder,
+            "mask_classification": mask_classification,
+        }
         enc_cfg = cfg['MODEL']['ENCODER']
         dec_cfg = cfg['MODEL']['DECODER']
 
@@ -191,7 +191,7 @@ class IMaskDINODecoder(nn.Module):
 
         # Transformer parameters:
         ret["num_mask_tokens"] = dec_cfg.get('NUM_MASK_TOKENS', 3)
-        
+
         ret["nheads"] = dec_cfg['NHEADS']
         ret["dim_feedforward"] = dec_cfg['DIM_FEEDFORWARD']
         ret["dec_layers"] = dec_cfg['DEC_LAYERS']
@@ -228,10 +228,7 @@ class IMaskDINODecoder(nn.Module):
             known_num = [sum(k) for k in known]
 
             # use fix number of dn queries
-            if max(known_num) > 0:
-                scalar = scalar // (int(max(known_num)))
-            else:
-                scalar = 0
+            scalar = scalar // (int(max(known_num))) if max(known_num) > 0 else 0
             if scalar == 0:
                 input_query_label = None
                 input_query_bbox = None
@@ -279,7 +276,7 @@ class IMaskDINODecoder(nn.Module):
             padding_label = input_label_embed.new_zeros(pad_size, self.hidden_dim)
             padding_bbox = input_bbox_embed.new_zeros(pad_size, 4)
 
-            if not refpoint_emb is None:
+            if refpoint_emb is not None:
                 input_query_label = torch.cat([padding_label, tgt], dim=0).repeat(batch_size, 1, 1)
                 input_query_bbox = torch.cat([padding_bbox, refpoint_emb], dim=0).repeat(batch_size, 1, 1)
             else:
@@ -304,11 +301,9 @@ class IMaskDINODecoder(nn.Module):
             for i in range(scalar):
                 if i == 0:
                     attn_mask[single_pad * i:single_pad * (i + 1), single_pad * (i + 1):pad_size] = True
-                if i == scalar - 1:
-                    attn_mask[single_pad * i:single_pad * (i + 1), :single_pad * i] = True
-                else:
+                if i != scalar - 1:
                     attn_mask[single_pad * i:single_pad * (i + 1), single_pad * (i + 1):pad_size] = True
-                    attn_mask[single_pad * i:single_pad * (i + 1), :single_pad * i] = True
+                attn_mask[single_pad * i:single_pad * (i + 1), :single_pad * i] = True
             mask_dict = {
                 'known_indice': torch.as_tensor(known_indice).long(),
                 'batch_idx': torch.as_tensor(batch_idx).long(),
@@ -319,7 +314,7 @@ class IMaskDINODecoder(nn.Module):
                 'scalar': scalar,
             }
         else:
-            if not refpoint_emb is None:
+            if refpoint_emb is not None:
                 input_query_label = tgt.repeat(batch_size, 1, 1)
                 input_query_bbox = refpoint_emb.repeat(batch_size, 1, 1)
             else:
@@ -329,7 +324,7 @@ class IMaskDINODecoder(nn.Module):
             mask_dict = None
 
         # 100*batch*256
-        if not input_query_bbox is None:
+        if input_query_bbox is not None:
             input_query_label = input_query_label
             input_query_bbox = input_query_bbox
 
@@ -403,11 +398,9 @@ class IMaskDINODecoder(nn.Module):
         for i in range(scalar):
             if i == 0:
                 attn_mask[single_pad * i:single_pad * (i + 1), single_pad * (i + 1):pad_size] = True
-            if i == scalar - 1:
-                attn_mask[single_pad * i:single_pad * (i + 1), :single_pad * i] = True
-            else:
+            if i != scalar - 1:
                 attn_mask[single_pad * i:single_pad * (i + 1), single_pad * (i + 1):pad_size] = True
-                attn_mask[single_pad * i:single_pad * (i + 1), :single_pad * i] = True
+            attn_mask[single_pad * i:single_pad * (i + 1), :single_pad * i] = True
         mask_dict = {
             'known_lbs_bboxes': (known_labels, known_bboxs),
             # 'know_idx': know_idx,
@@ -473,8 +466,7 @@ class IMaskDINODecoder(nn.Module):
         valid_W = torch.sum(~mask[:, 0, :], 1)
         valid_ratio_h = valid_H.float() / H
         valid_ratio_w = valid_W.float() / W
-        valid_ratio = torch.stack([valid_ratio_w, valid_ratio_h], -1)
-        return valid_ratio
+        return torch.stack([valid_ratio_w, valid_ratio_h], -1)
 
     def pred_box(self, reference, hs, ref0=None):
         """
@@ -482,11 +474,8 @@ class IMaskDINODecoder(nn.Module):
         :param hs: content
         :param ref0: whether there are prediction from the first layer
         """
-        if ref0 is None:
-            outputs_coord_list = []
-        else:
-            outputs_coord_list = [ref0]
-        for dec_lid, (layer_ref_sig, layer_bbox_embed, layer_hs) in enumerate(zip(reference[:-1], self.bbox_embed, hs)):
+        outputs_coord_list = [] if ref0 is None else [ref0]
+        for layer_ref_sig, layer_bbox_embed, layer_hs in zip(reference[:-1], self.bbox_embed, hs):
             layer_delta_unsig = layer_bbox_embed(layer_hs)
             # layer_outputs_unsig = layer_delta_unsig + inverse_sigmoid(layer_ref_sig)
             new_layer_ref_sig = layer_ref_sig.view(layer_ref_sig.shape[0], -1, self.num_all_tokens, layer_ref_sig.shape[-1])

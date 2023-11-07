@@ -2,7 +2,7 @@ import numpy as np
 
 
 def get_prompt_templates():
-    prompt_templates = [
+    return [
         '{}.',
         'a photo of a {}.',
         'a bad photo of a {}.',
@@ -85,7 +85,6 @@ def get_prompt_templates():
         'a photo of a small {}.',
         'a tattoo of the {}.',
     ]
-    return prompt_templates
 
 def prompt_engineering(classnames, topk=1, suffix='.'):
     prompt_templates = get_prompt_templates()

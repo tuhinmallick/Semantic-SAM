@@ -36,9 +36,9 @@ def load_scannet_instances(name: str, dirname: str, split: str, class_names: Uni
         split (str): one of "train", "test", "val", "trainval"
         class_names: list or tuple of class names
     """
-    with PathManager.open(os.path.join(dirname, "meta", split + ".txt")) as f:
+    with PathManager.open(os.path.join(dirname, "meta", f"{split}.txt")) as f:
         fileids = np.loadtxt(f, dtype=np.str)
-        
+
     dicts = []
     for field in fileids:
         image_dir = os.path.join(dirname, 'images', field[0])

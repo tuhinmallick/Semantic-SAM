@@ -281,18 +281,14 @@ class BasicLayer(nn.Module):
         """
         for blk in self.blocks:
             blk.H, blk.W = H, W
-            if self.use_checkpoint:
-                x = checkpoint.checkpoint(blk, x)
-            else:
-                x = blk(x)
-        if self.downsample is not None:
-            x_reshaped = x.transpose(1, 2).view(x.shape[0], x.shape[-1], H, W)
-            x_down = self.downsample(x_reshaped)   
-            x_down = x_down.flatten(2).transpose(1, 2)            
-            Wh, Ww = (H + 1) // 2, (W + 1) // 2
-            return x, H, W, x_down, Wh, Ww
-        else:
+            x = checkpoint.checkpoint(blk, x) if self.use_checkpoint else blk(x)
+        if self.downsample is None:
             return x, H, W, x, H, W
+        x_reshaped = x.transpose(1, 2).view(x.shape[0], x.shape[-1], H, W)
+        x_down = self.downsample(x_reshaped)
+        x_down = x_down.flatten(2).transpose(1, 2)
+        Wh, Ww = (H + 1) // 2, (W + 1) // 2
+        return x, H, W, x_down, Wh, Ww
 
 
 # class PatchEmbed(nn.Module):
@@ -396,16 +392,12 @@ class PatchEmbed(nn.Module):
         else:
             self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
 
-        if self.use_pre_norm:
-            if norm_layer is not None:
-                self.norm = norm_layer(in_chans)
-            else:
-                self.norm = None       
+        if norm_layer is None:
+            self.norm = None
+        elif self.use_pre_norm:
+            self.norm = norm_layer(in_chans)
         else:
-            if norm_layer is not None:
-                self.norm = norm_layer(embed_dim)
-            else:
-                self.norm = None
+            self.norm = norm_layer(embed_dim)
 
     def forward(self, x):
         """Forward function."""
@@ -678,8 +670,8 @@ class FocalNet(nn.Module):
                 x_out = norm_layer(x_out)
 
                 out = x_out.view(-1, H, W, self.num_features[i]).permute(0, 3, 1, 2).contiguous()
-                outs["res{}".format(i + 2)] = out
-                
+                outs[f"res{i + 2}"] = out
+
         if len(self.out_indices) == 0:
             outs["res5"] = x_out.view(-1, H, W, self.num_features[i]).permute(0, 3, 1, 2).contiguous()
 
@@ -756,12 +748,8 @@ class D2FocalNet(FocalNet, Backbone):
         assert (
             x.dim() == 4
         ), f"SwinTransformer takes an input of shape (N, C, H, W). Got {x.shape} instead!"
-        outputs = {}
         y = super().forward(x)
-        for k in y.keys():
-            if k in self._out_features:
-                outputs[k] = y[k]
-        return outputs
+        return {k: y[k] for k in y.keys() if k in self._out_features}
 
     def output_shape(self):
         return {

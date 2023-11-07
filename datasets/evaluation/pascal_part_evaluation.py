@@ -55,7 +55,7 @@ class PASCALPARTEvaluator(COCOEvaluator):
             for idx, metric in enumerate(metrics)
         }
         self._logger.info(
-            "Evaluation results for {}: \n".format(iou_type) + create_small_table(results)
+            f"Evaluation results for {iou_type}: \n{create_small_table(results)}"
         )
         if not np.isfinite(sum(results.values())):
             self._logger.info("Some metrics cannot be computed and is shown as NaN.")
@@ -68,8 +68,8 @@ class PASCALPARTEvaluator(COCOEvaluator):
         # precision has dims (iou, recall, cls, area range, max dets)
         assert len(class_names) == precisions.shape[2]
 
-        seen_names = set([x['name'] for x in categories_seen])
-        unseen_names = set([x['name'] for x in categories_unseen])
+        seen_names = {x['name'] for x in categories_seen}
+        unseen_names = {x['name'] for x in categories_unseen}
         results_per_category = []
         results_per_category50 = []
         results_per_category_seen = []
@@ -82,11 +82,11 @@ class PASCALPARTEvaluator(COCOEvaluator):
             precision = precisions[:, :, idx, 0, -1]
             precision = precision[precision > -1]
             ap = np.mean(precision) if precision.size else float("nan")
-            results_per_category.append(("{}".format(name), float(ap * 100)))
+            results_per_category.append((f"{name}", float(ap * 100)))
             precision50 = precisions[0, :, idx, 0, -1]
             precision50 = precision50[precision50 > -1]
             ap50 = np.mean(precision50) if precision50.size else float("nan")
-            results_per_category50.append(("{}".format(name), float(ap50 * 100)))
+            results_per_category50.append((f"{name}", float(ap50 * 100)))
             if name in seen_names:
                 results_per_category_seen.append(float(ap * 100))
                 results_per_category50_seen.append(float(ap50 * 100))
@@ -105,7 +105,7 @@ class PASCALPARTEvaluator(COCOEvaluator):
             headers=["category", "AP"] * (N_COLS // 2),
             numalign="left",
         )
-        self._logger.info("Per-category {} AP: \n".format(iou_type) + table)
+        self._logger.info(f"Per-category {iou_type} AP: \n{table}")
 
         N_COLS = min(6, len(results_per_category50) * 2)
         results_flatten = list(itertools.chain(*results_per_category50))
@@ -117,31 +117,23 @@ class PASCALPARTEvaluator(COCOEvaluator):
             headers=["category", "AP50"] * (N_COLS // 2),
             numalign="left",
         )
-        self._logger.info("Per-category {} AP50: \n".format(iou_type) + table)
+        self._logger.info(f"Per-category {iou_type} AP50: \n{table}")
 
         self._logger.info(
-            "Seen {} AP: {}".format(
-                iou_type,
-                sum(results_per_category_seen) / len(results_per_category_seen),
-            ))
+            f"Seen {iou_type} AP: {sum(results_per_category_seen) / len(results_per_category_seen)}"
+        )
         self._logger.info(
-            "Unseen {} AP: {}".format(
-                iou_type,
-                sum(results_per_category_unseen) / len(results_per_category_unseen),
-            ))
+            f"Unseen {iou_type} AP: {sum(results_per_category_unseen) / len(results_per_category_unseen)}"
+        )
 
         self._logger.info(
-            "Seen {} AP50: {}".format(
-                iou_type,
-                sum(results_per_category50_seen) / len(results_per_category50_seen),
-            ))
+            f"Seen {iou_type} AP50: {sum(results_per_category50_seen) / len(results_per_category50_seen)}"
+        )
         self._logger.info(
-            "Unseen {} AP50: {}".format(
-                iou_type,
-                sum(results_per_category50_unseen) / len(results_per_category50_unseen),
-            ))
+            f"Unseen {iou_type} AP50: {sum(results_per_category50_unseen) / len(results_per_category50_unseen)}"
+        )
 
-        results.update({"AP-" + name: ap for name, ap in results_per_category})
+        results.update({f"AP-{name}": ap for name, ap in results_per_category})
         results["AP-seen"] = sum(results_per_category_seen) / len(results_per_category_seen)
         results["AP-unseen"] = sum(results_per_category_unseen) / len(results_per_category_unseen)
         results["AP50-seen"] = sum(results_per_category50_seen) / len(results_per_category50_seen)

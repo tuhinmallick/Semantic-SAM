@@ -44,9 +44,7 @@ def filter_empty_instances_by_box(
     m = r[0]
     for x in r[1:]:
         m = m & x
-    if return_mask:
-        return instances[m], m
-    return instances[m]
+    return (instances[m], m) if return_mask else instances[m]
 
 def filter_no_part_instances(instances):
     """
@@ -64,11 +62,11 @@ def convert_coco_poly_to_mask(segmentations, height, width):
         mask = torch.as_tensor(mask, dtype=torch.uint8)
         mask = mask.any(dim=2)
         masks.append(mask)
-    if masks:
-        masks = torch.stack(masks, dim=0)
-    else:
-        masks = torch.zeros((0, height, width), dtype=torch.uint8)
-    return masks
+    return (
+        torch.stack(masks, dim=0)
+        if masks
+        else torch.zeros((0, height, width), dtype=torch.uint8)
+    )
 
 
 def build_transform_gen(cfg, is_train):
@@ -142,7 +140,7 @@ class PartFilterWholeInstanceNewBaselineDatasetMapper:
         """
         self.tfm_gens = tfm_gens
         logging.getLogger(__name__).info(
-            "[COCOInstanceNewBaselineDatasetMapper] Full TransformGens used in training: {}".format(str(self.tfm_gens))
+            f"[COCOInstanceNewBaselineDatasetMapper] Full TransformGens used in training: {str(self.tfm_gens)}"
         )
 
         self.img_format = image_format
@@ -154,13 +152,12 @@ class PartFilterWholeInstanceNewBaselineDatasetMapper:
         # Build augmentation
         tfm_gens = build_transform_gen(cfg, is_train)
 
-        ret = {
+        return {
             "is_train": is_train,
             "tfm_gens": tfm_gens,
             "image_format": cfg['INPUT']['FORMAT'],
             "dataset_name": dataset_name,
         }
-        return ret
 
     def __call__(self, dataset_dict):
         """
@@ -223,17 +220,12 @@ class PartFilterWholeInstanceNewBaselineDatasetMapper:
                     # COCO RLE
                     masks.append(mask_util.decode(segm))
                 elif isinstance(segm, np.ndarray):  # go this way
-                    assert segm.ndim == 2, "Expect segmentation of 2 dimensions, got {}.".format(
-                        segm.ndim
-                    )
+                    assert segm.ndim == 2, f"Expect segmentation of 2 dimensions, got {segm.ndim}."
                     # mask array
                     masks.append(segm)
                 else:
                     raise ValueError(
-                        "Cannot convert segmentation of type '{}' to BitMasks!"
-                        "Supported types are: polygons as list[list[float] or ndarray],"
-                        " COCO-style RLE as a dict, or a binary segmentation mask "
-                        " in a 2D numpy array of shape HxW.".format(type(segm))
+                        f"Cannot convert segmentation of type '{type(segm)}' to BitMasks!Supported types are: polygons as list[list[float] or ndarray], COCO-style RLE as a dict, or a binary segmentation mask  in a 2D numpy array of shape HxW."
                     )
 
             # Pad image and segmentation label here!
@@ -254,7 +246,7 @@ class PartFilterWholeInstanceNewBaselineDatasetMapper:
             # Prepare per-category binary masks
             instances = Instances(image_shape)
             classes = torch.tensor(classes, dtype=torch.int64)
-            masks = torch.stack(masks) if len(masks)>0 else masks
+            masks = torch.stack(masks) if masks else masks
             if 'paco' in self.dataset_name and len(masks)>0:
                 thing_classes_id_without_part = metadata.thing_classes_id_without_part
                 filter_no_part_mask = [c not in thing_classes_id_without_part for c in classes]

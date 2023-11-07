@@ -71,7 +71,7 @@ class InstanceSegEvaluator(COCOEvaluator):
 
         if self._output_dir:
             file_path = os.path.join(self._output_dir, "coco_instances_results.json")
-            self._logger.info("Saving results to {}".format(file_path))
+            self._logger.info(f"Saving results to {file_path}")
             with PathManager.open(file_path, "w") as f:
                 f.write(json.dumps(coco_results))
                 f.flush()
@@ -81,9 +81,7 @@ class InstanceSegEvaluator(COCOEvaluator):
             return
 
         self._logger.info(
-            "Evaluating predictions with {} COCO API...".format(
-                "unofficial" if self._use_fast_impl else "official"
-            )
+            f'Evaluating predictions with {"unofficial" if self._use_fast_impl else "official"} COCO API...'
         )
         for task in sorted(tasks):
             assert task in {"bbox", "segm", "keypoints"}, f"Got unknown task: {task}!"
@@ -97,8 +95,8 @@ class InstanceSegEvaluator(COCOEvaluator):
                     img_ids=img_ids,
                     max_dets_per_image=self._max_dets_per_image,
                 )
-                if len(coco_results) > 0
-                else None  # cocoapi does not handle empty results very well
+                if coco_results
+                else None
             )
 
             res = self._derive_coco_results(

@@ -31,11 +31,10 @@ def _get_ade_instances_meta():
     # Mapping from the incontiguous ADE category id to an id in [0, 99]
     thing_dataset_id_to_contiguous_id = {k: i for i, k in enumerate(thing_ids)}
     thing_classes = [k["name"] for k in ADE_CATEGORIES]
-    ret = {
+    return {
         "thing_dataset_id_to_contiguous_id": thing_dataset_id_to_contiguous_id,
         "thing_classes": thing_classes,
     }
-    return ret
 
 
 def register_all_ade20k_instance(root):

@@ -19,7 +19,7 @@ def filter_empty_instances_by_box(
         r.append(instances.gt_boxes.nonempty(threshold=box_threshold))
     if instances.has("gt_masks") and by_mask:
         r.append(instances.gt_masks.nonempty())
-        
+
     # TODO: can also filter visible keypoints
 
     if not r:
@@ -27,9 +27,7 @@ def filter_empty_instances_by_box(
     m = r[0]
     for x in r[1:]:
         m = m & x
-    if return_mask:
-        return instances[m], m
-    return instances[m]
+    return (instances[m], m) if return_mask else instances[m]
 
 
 class DatasetMapperFilterByBox(DatasetMapper):

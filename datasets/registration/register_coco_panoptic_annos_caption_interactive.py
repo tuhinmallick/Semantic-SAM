@@ -36,7 +36,6 @@ _PREDEFINED_SPLITS_COCO_PANOPTIC_CAPTION = {
 
 
 def get_metadata():
-    meta = {}
     # The following metadata maps contiguous id from [0, #thing categories +
     # #stuff categories) to their names and colors. We have to replica of the
     # same name and color under "thing_*" and "stuff_*" because the current
@@ -48,11 +47,12 @@ def get_metadata():
     stuff_classes = [k["name"] for k in COCO_CATEGORIES]
     stuff_colors = [k["color"] for k in COCO_CATEGORIES]
 
-    meta["thing_classes"] = thing_classes
-    meta["thing_colors"] = thing_colors
-    meta["stuff_classes"] = stuff_classes
-    meta["stuff_colors"] = stuff_colors
-
+    meta = {
+        "thing_classes": thing_classes,
+        "thing_colors": thing_colors,
+        "stuff_classes": stuff_classes,
+        "stuff_colors": stuff_colors,
+    }
     # Convert category id for training:
     #   category id: like semantic segmentation, it is the class id for each
     #   pixel. Since there are some classes not used in evaluation, the category
@@ -156,7 +156,7 @@ def register_coco_panoptic_annos_caption_sem_seg(
     )
 
     # the name is "coco_2017_train_panoptic_with_sem_seg" and "coco_2017_val_panoptic_with_sem_seg"
-    semantic_name = name + "_with_sem_seg_caption"
+    semantic_name = f"{name}_with_sem_seg_caption"
     DatasetCatalog.register(
         semantic_name,
         lambda: load_coco_panoptic_json(panoptic_json, image_root, panoptic_root, sem_seg_root, caption_root, metadata),

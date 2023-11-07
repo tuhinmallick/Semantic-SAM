@@ -33,16 +33,16 @@ def init_distributed_mode(args):
         # args.world_size = args.world_size * local_world_size
         # args.gpu = args.local_rank = int(os.environ['LOCAL_RANK'])
         # args.rank = args.rank * local_world_size + args.local_rank
-        print('world size: {}, rank: {}, local rank: {}'.format(args.world_size, args.rank, args.local_rank))
+        print(
+            f'world size: {args.world_size}, rank: {args.rank}, local rank: {args.local_rank}'
+        )
         print(json.dumps(dict(os.environ), indent=2))
     elif 'SLURM_PROCID' in os.environ:
         args.rank = int(os.environ['SLURM_PROCID'])
         args.gpu = args.local_rank = int(os.environ['SLURM_LOCALID'])
         args.world_size = int(os.environ['SLURM_NPROCS'])
 
-        if os.environ.get('HAND_DEFINE_DIST_URL', 0) == '1':
-            pass
-        else:
+        if os.environ.get('HAND_DEFINE_DIST_URL', 0) != '1':
             import util.hostlist as uh
             nodenames = uh.parse_nodelist(os.environ['SLURM_JOB_NODELIST'])
             gpu_ids = [int(node[3:]) for node in nodenames]
@@ -51,7 +51,9 @@ def init_distributed_mode(args):
             port = str(3137 + int(min(gpu_ids)) + fixid)
             args.dist_url = "tcp://{ip}:{port}".format(ip=uh.nodename_to_ip(nodenames[0]), port=port)
 
-        print('world size: {}, world rank: {}, local rank: {}, device_count: {}'.format(args.world_size, args.rank, args.local_rank, torch.cuda.device_count()))
+        print(
+            f'world size: {args.world_size}, world rank: {args.rank}, local rank: {args.local_rank}, device_count: {torch.cuda.device_count()}'
+        )
 
 
     else:
@@ -62,11 +64,13 @@ def init_distributed_mode(args):
         args.local_rank = 0
         return
 
-    print("world_size:{} rank:{} local_rank:{}".format(args.world_size, args.rank, args.local_rank))
+    print(
+        f"world_size:{args.world_size} rank:{args.rank} local_rank:{args.local_rank}"
+    )
     args.distributed = True
     torch.cuda.set_device(args.local_rank)
     args.dist_backend = 'nccl'
-    print('| distributed init (rank {}): {}'.format(args.rank, args.dist_url), flush=True)
+    print(f'| distributed init (rank {args.rank}): {args.dist_url}', flush=True)
 
     torch.distributed.init_process_group(
         backend=args.dist_backend, 

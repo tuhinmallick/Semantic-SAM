@@ -58,11 +58,9 @@ def load_pretrain_data(arrow_root, meta, name, pretrain_arrows):
     ret = []
 
     image_id = 0
-    arr_id = 0
-    for arr in pretrain_arrows:
+    for arr_id, arr in enumerate(pretrain_arrows):
         arr_len = len(arr)
-        cur_id = 0
-        for i in range(arr_len):
+        for cur_id, i in enumerate(range(arr_len)):
             captions = arr['caption'][i].as_py()
             image_id = arr['image_id'][i].as_py()
             if not isinstance(image_id, int):
@@ -75,19 +73,18 @@ def load_pretrain_data(arrow_root, meta, name, pretrain_arrows):
                     "cur_id": cur_id,
                 })
             else:
-                for caption in captions:
-                    ret.append( {
+                ret.extend(
+                    {
                         "image_id": image_id,
                         "captions": [caption],
                         "arr_id": arr_id,
                         "cur_id": cur_id,
-                    })
-            cur_id += 1
+                    }
+                    for caption in captions
+                )
             image_id += 1
 
-        arr_id += 1
-
-    assert len(ret), f"No images found in pretraining"
+    assert len(ret), "No images found in pretraining"
     return ret
 
 

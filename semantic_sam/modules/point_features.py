@@ -257,5 +257,4 @@ def sample_point_labels(instances, point_coords):
                 ).squeeze(1)
             )
 
-    point_labels = cat(gt_mask_logits)
-    return point_labels
+    return cat(gt_mask_logits)

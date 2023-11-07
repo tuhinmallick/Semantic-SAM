@@ -65,13 +65,11 @@ def dice_loss(
     inputs = inputs.flatten(1)
     numerator = 2 * (inputs * targets).sum(-1)
     denominator = inputs.sum(-1) + targets.sum(-1)
-    loss = 1 - (numerator + 1) / (denominator + 1)
-    return loss
+    return 1 - (numerator + 1) / (denominator + 1)
 
 
 def iou_score_loss(inputs, targets):
-    ce_loss = F.mse_loss(inputs, targets, reduction="none")
-    return ce_loss
+    return F.mse_loss(inputs, targets, reduction="none")
 
 
 dice_loss_jit = torch.jit.script(
@@ -183,8 +181,7 @@ class SetCriterion(nn.Module):
         target_classes[idx] = target_classes_o
 
         loss_ce = F.cross_entropy(src_logits.transpose(1, 2), target_classes, self.empty_weight)
-        losses = {"loss_ce": loss_ce}
-        return losses
+        return {"loss_ce": loss_ce}
 
     def loss_labels(self, outputs, targets, indices, num_boxes, log=True, key='gt_whole_classes'):
         """Classification loss (Binary focal loss)
@@ -194,13 +191,12 @@ class SetCriterion(nn.Module):
         if self.prediction_switch is None or 'whole' not in self.prediction_switch.keys():
             if 'labels' in targets[0].keys() and targets[0]['labels'] is not None:
                 key = 'labels'
-        else:
-            if not self.prediction_switch['whole']:
-                return {"fake_no_loss_mask_cls_0": 0.0}
-            elif key not in targets[0].keys() or 'masks' not in targets[0].keys():
-                # FIXME only consider batchsize=1 case
-                assert len(targets) == 1
-                return {"loss_mask_cls_0": 0.0 * outputs['pred_logits'].sum()}
+        elif not self.prediction_switch['whole']:
+            return {"fake_no_loss_mask_cls_0": 0.0}
+        elif key not in targets[0].keys() or 'masks' not in targets[0].keys():
+            # FIXME only consider batchsize=1 case
+            assert len(targets) == 1
+            return {"loss_mask_cls_0": 0.0 * outputs['pred_logits'].sum()}
         src_logits = outputs['pred_logits']
         assert self.index is not None
         idx = self._get_src_permutation_idx(indices)
@@ -215,13 +211,16 @@ class SetCriterion(nn.Module):
 
         target_classes_onehot = target_classes_onehot[:, :, :-1]
         loss_ce = sigmoid_focal_loss(src_logits, target_classes_onehot, num_boxes, alpha=self.focal_alpha, gamma=2) * \
-                  src_logits.shape[1]
-        losses = {}
+                      src_logits.shape[1]
         loss_ce = loss_ce.sum(2)
-        losses["loss_mask_cls_0"] = torch.gather(loss_ce.view(-1, self.num_mask_tokens), 1, self.index.unsqueeze(1)).mean().sum() / num_boxes
-        # losses = {"loss_mask_cls_0": loss_ce}
-
-        return losses
+        return {
+            "loss_mask_cls_0": torch.gather(
+                loss_ce.view(-1, self.num_mask_tokens), 1, self.index.unsqueeze(1)
+            )
+            .mean()
+            .sum()
+            / num_boxes
+        }
 
     def loss_labels_part(self, outputs, targets, indices, num_boxes, log=True, key='gt_part_classes'):
         """Classification loss (Binary focal loss)
@@ -249,13 +248,16 @@ class SetCriterion(nn.Module):
 
         target_classes_onehot = target_classes_onehot[:, :, :-1]
         loss_ce = sigmoid_focal_loss(src_logits, target_classes_onehot, num_boxes, alpha=self.focal_alpha, gamma=2) * \
-                  src_logits.shape[1]
-        losses = {}
+                      src_logits.shape[1]
         loss_ce = loss_ce.sum(2)
-        losses["loss_mask_part_cls_0"] = torch.gather(loss_ce.view(-1, self.num_mask_tokens), 1, self.index.unsqueeze(1)).mean().sum() / num_boxes
-        # losses = {"loss_mask_part_cls_0": loss_ce}
-
-        return losses
+        return {
+            "loss_mask_part_cls_0": torch.gather(
+                loss_ce.view(-1, self.num_mask_tokens), 1, self.index.unsqueeze(1)
+            )
+            .mean()
+            .sum()
+            / num_boxes
+        }
 
     def loss_boxes(self, outputs, targets, indices, num_boxes):
         """Compute the losses related to the bounding boxes, the L1 regression loss and the GIoU loss
@@ -274,10 +276,15 @@ class SetCriterion(nn.Module):
         target_boxes = torch.cat([t['boxes'][i] for t, (_, i) in zip(targets, indices)], dim=0)
 
         loss_bbox = F.l1_loss(src_boxes, target_boxes, reduction='none')
-        losses = {}
         loss_bbox = loss_bbox.sum(1)
-        losses["loss_bbox_0"] = torch.gather(loss_bbox.view(-1, self.num_mask_tokens), 1, self.index.unsqueeze(1)).sum() / num_boxes
-
+        losses = {
+            "loss_bbox_0": torch.gather(
+                loss_bbox.view(-1, self.num_mask_tokens),
+                1,
+                self.index.unsqueeze(1),
+            ).sum()
+            / num_boxes
+        }
         loss_giou = 1 - torch.diag(box_ops.generalized_box_iou(
             box_ops.box_cxcywh_to_xyxy(src_boxes),
             box_ops.box_cxcywh_to_xyxy(target_boxes)))
@@ -300,9 +307,7 @@ class SetCriterion(nn.Module):
         src_boxes = src_boxes[isthing]
 
         loss_bbox = F.l1_loss(src_boxes, target_boxes, reduction='none')
-        losses = {}
-        losses["loss_bbox_0"] = loss_bbox.sum() / num_boxes
-
+        losses = {"loss_bbox_0": loss_bbox.sum() / num_boxes}
         loss_giou = 1 - torch.diag(box_ops.generalized_box_iou(
             box_ops.box_cxcywh_to_xyxy(src_boxes),
             box_ops.box_cxcywh_to_xyxy(target_boxes)))
@@ -434,7 +439,14 @@ class SetCriterion(nn.Module):
         prediction_switch = extra
         self.prediction_switch = prediction_switch
         if mask_dict is None:
-            sudo_loss = sum([outputs[key].sum() for key in outputs.keys() if key != 'aux_outputs' and outputs[key] is not None]) * 0.0
+            sudo_loss = (
+                sum(
+                    outputs[key].sum()
+                    for key in outputs.keys()
+                    if key != 'aux_outputs' and outputs[key] is not None
+                )
+                * 0.0
+            )
             losses = dict()
             l_dict = dict()
             l_dict['loss_bbox_0'] = sudo_loss
@@ -501,16 +513,16 @@ class SetCriterion(nn.Module):
         return losses
 
     def __repr__(self):
-        head = "Criterion " + self.__class__.__name__
+        head = f"Criterion {self.__class__.__name__}"
         body = [
             "matcher: {}".format(self.matcher.__repr__(_repr_indent=8)),
-            "losses: {}".format(self.losses),
-            "weight_dict: {}".format(self.weight_dict),
-            "num_classes: {}".format(self.num_classes),
-            "eos_coef: {}".format(self.eos_coef),
-            "num_points: {}".format(self.num_points),
-            "oversample_ratio: {}".format(self.oversample_ratio),
-            "importance_sample_ratio: {}".format(self.importance_sample_ratio),
+            f"losses: {self.losses}",
+            f"weight_dict: {self.weight_dict}",
+            f"num_classes: {self.num_classes}",
+            f"eos_coef: {self.eos_coef}",
+            f"num_points: {self.num_points}",
+            f"oversample_ratio: {self.oversample_ratio}",
+            f"importance_sample_ratio: {self.importance_sample_ratio}",
         ]
         _repr_indent = 4
         lines = [head] + [" " * _repr_indent + line for line in body]

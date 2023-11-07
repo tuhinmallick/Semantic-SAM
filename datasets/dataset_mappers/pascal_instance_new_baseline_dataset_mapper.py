@@ -27,7 +27,7 @@ def filter_empty_instances_by_box(
         r.append(instances.gt_boxes.nonempty(threshold=box_threshold))
     if instances.has("gt_masks") and by_mask:
         r.append(instances.gt_masks.nonempty())
-        
+
     # TODO: can also filter visible keypoints
 
     if not r:
@@ -35,9 +35,7 @@ def filter_empty_instances_by_box(
     m = r[0]
     for x in r[1:]:
         m = m & x
-    if return_mask:
-        return instances[m], m
-    return instances[m]
+    return (instances[m], m) if return_mask else instances[m]
 
 def convert_coco_poly_to_mask(segmentations, height, width):
     masks = []
@@ -49,11 +47,11 @@ def convert_coco_poly_to_mask(segmentations, height, width):
         mask = torch.as_tensor(mask, dtype=torch.uint8)
         mask = mask.any(dim=2)
         masks.append(mask)
-    if masks:
-        masks = torch.stack(masks, dim=0)
-    else:
-        masks = torch.zeros((0, height, width), dtype=torch.uint8)
-    return masks
+    return (
+        torch.stack(masks, dim=0)
+        if masks
+        else torch.zeros((0, height, width), dtype=torch.uint8)
+    )
 
 
 def build_transform_gen(cfg, is_train):
@@ -123,7 +121,7 @@ class PascalInstanceNewBaselineDatasetMapper:
         """
         self.tfm_gens = tfm_gens
         logging.getLogger(__name__).info(
-            "[COCOInstanceNewBaselineDatasetMapper] Full TransformGens used in training: {}".format(str(self.tfm_gens))
+            f"[COCOInstanceNewBaselineDatasetMapper] Full TransformGens used in training: {str(self.tfm_gens)}"
         )
 
         self.img_format = image_format
@@ -134,12 +132,11 @@ class PascalInstanceNewBaselineDatasetMapper:
         # Build augmentation
         tfm_gens = build_transform_gen(cfg, is_train)
 
-        ret = {
+        return {
             "is_train": is_train,
             "tfm_gens": tfm_gens,
             "image_format": cfg['INPUT']['FORMAT'],
         }
-        return ret
 
     def __call__(self, dataset_dict):
         """
@@ -189,7 +186,7 @@ class PascalInstanceNewBaselineDatasetMapper:
                 for obj in dataset_dict.pop("annotations")
                 if obj.get("iscrowd", 0) == 0
             ]
-            
+
             if len(annos):
                 assert "segmentation" in annos[0]
             segms = [obj["segmentation"] for obj in annos]
@@ -202,17 +199,12 @@ class PascalInstanceNewBaselineDatasetMapper:
                     # COCO RLE
                     masks.append(mask_util.decode(segm))
                 elif isinstance(segm, np.ndarray):   # go this way
-                    assert segm.ndim == 2, "Expect segmentation of 2 dimensions, got {}.".format(
-                        segm.ndim
-                    )
+                    assert segm.ndim == 2, f"Expect segmentation of 2 dimensions, got {segm.ndim}."
                     # mask array
                     masks.append(segm)
                 else:
                     raise ValueError(
-                        "Cannot convert segmentation of type '{}' to BitMasks!"
-                        "Supported types are: polygons as list[list[float] or ndarray],"
-                        " COCO-style RLE as a dict, or a binary segmentation mask "
-                        " in a 2D numpy array of shape HxW.".format(type(segm))
+                        f"Cannot convert segmentation of type '{type(segm)}' to BitMasks!Supported types are: polygons as list[list[float] or ndarray], COCO-style RLE as a dict, or a binary segmentation mask  in a 2D numpy array of shape HxW."
                     )
 
             # Pad image and segmentation label here!
@@ -220,7 +212,7 @@ class PascalInstanceNewBaselineDatasetMapper:
             masks = [torch.from_numpy(np.ascontiguousarray(x)) for x in masks]
 
             classes = [int(obj["category_id"]) for obj in annos]
-            
+
             metadata = MetadataCatalog.get('pascal_part_train')
 
             image_shape = (image.shape[-2], image.shape[-1])  # h, w
@@ -232,16 +224,16 @@ class PascalInstanceNewBaselineDatasetMapper:
 
             # Prepare per-category binary masks
             instances = Instances(image_shape)
-            
+
             whole_classes = [metadata.thing_clases_id_to_whole_id[c] for c in classes]
             part_classes = [metadata.thing_clases_id_to_part_id[c] for c in classes]
             instances.gt_whole_classes = torch.tensor(whole_classes, dtype=torch.int64)
             instances.gt_part_classes = torch.tensor(part_classes, dtype=torch.int64)
-            
+
             classes = torch.tensor(classes, dtype=torch.int64)
             instances.gt_classes = classes
-            
-            if len(masks) == 0:
+
+            if not masks:
                 # Some image does not have annotation (all ignored)
                 instances.gt_masks = torch.zeros((0, image.shape[-2], image.shape[-1]))
                 instances.gt_boxes = Boxes(torch.zeros((0, 4)))
@@ -249,32 +241,32 @@ class PascalInstanceNewBaselineDatasetMapper:
                 masks = BitMasks(torch.stack(masks))
                 instances.gt_boxes = masks.get_bounding_boxes()
                 instances.gt_masks = masks.tensor
-            
+
             dataset_dict["instances"] = filter_empty_instances_by_box(instances)
-            # # NOTE: does not support BitMask due to augmentation
-            # # Current BitMask cannot handle empty objects
-            # instances = utils.annotations_to_instances(annos, image_shape)
-            # # After transforms such as cropping are applied, the bounding box may no longer
-            # # tightly bound the object. As an example, imagine a triangle object
-            # # [(0,0), (2,0), (0,2)] cropped by a box [(1,0),(2,2)] (XYXY format). The tight
-            # # bounding box of the cropped triangle should be [(1,0),(2,1)], which is not equal to
-            # # the intersection of original bounding box and the cropping box.
-            # instances.gt_boxes = instances.gt_masks.get_bounding_boxes()
-            # # Need to filter empty instances first (due to augmentation)
-            # instances = utils.filter_empty_instances(instances)
-            # # Generate masks from polygon
-            # h, w = instances.image_size
-            # # image_size_xyxy = torch.as_tensor([w, h, w, h], dtype=torch.float)
-            # if hasattr(instances, 'gt_masks'):
-            #     masks = BitMasks(
-            #         torch.stack([torch.from_numpy(np.ascontiguousarray(x.copy())) for x in masks])
-            #     )
-            #     instances.gt_masks = masks.tensor
-            #     instances.gt_boxes = masks.get_bounding_boxes()
-                
-            #     gt_masks = instances.gt_masks
-            #     gt_masks = convert_coco_poly_to_mask(gt_masks.polygons, h, w)
-            #     instances.gt_masks = gt_masks
-            # dataset_dict["instances"] = instances
+                # # NOTE: does not support BitMask due to augmentation
+                # # Current BitMask cannot handle empty objects
+                # instances = utils.annotations_to_instances(annos, image_shape)
+                # # After transforms such as cropping are applied, the bounding box may no longer
+                # # tightly bound the object. As an example, imagine a triangle object
+                # # [(0,0), (2,0), (0,2)] cropped by a box [(1,0),(2,2)] (XYXY format). The tight
+                # # bounding box of the cropped triangle should be [(1,0),(2,1)], which is not equal to
+                # # the intersection of original bounding box and the cropping box.
+                # instances.gt_boxes = instances.gt_masks.get_bounding_boxes()
+                # # Need to filter empty instances first (due to augmentation)
+                # instances = utils.filter_empty_instances(instances)
+                # # Generate masks from polygon
+                # h, w = instances.image_size
+                # # image_size_xyxy = torch.as_tensor([w, h, w, h], dtype=torch.float)
+                # if hasattr(instances, 'gt_masks'):
+                #     masks = BitMasks(
+                #         torch.stack([torch.from_numpy(np.ascontiguousarray(x.copy())) for x in masks])
+                #     )
+                #     instances.gt_masks = masks.tensor
+                #     instances.gt_boxes = masks.get_bounding_boxes()
+                    
+                #     gt_masks = instances.gt_masks
+                #     gt_masks = convert_coco_poly_to_mask(gt_masks.polygons, h, w)
+                #     instances.gt_masks = gt_masks
+                # dataset_dict["instances"] = instances
 
         return dataset_dict

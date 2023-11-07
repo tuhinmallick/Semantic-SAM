@@ -50,7 +50,6 @@ _PREDEFINED_SPLITS_COCO_PANOPTIC_CAPTION = {
 
 
 def get_metadata():
-    meta = {}
     # The following metadata maps contiguous id from [0, #thing categories +
     # #stuff categories) to their names and colors. We have to replica of the
     # same name and color under "thing_*" and "stuff_*" because the current
@@ -62,11 +61,12 @@ def get_metadata():
     stuff_classes = [k["name"] for k in COCO_CATEGORIES]
     stuff_colors = [k["color"] for k in COCO_CATEGORIES]
 
-    meta["thing_classes"] = thing_classes
-    meta["thing_colors"] = thing_colors
-    meta["stuff_classes"] = stuff_classes
-    meta["stuff_colors"] = stuff_colors
-
+    meta = {
+        "thing_classes": thing_classes,
+        "thing_colors": thing_colors,
+        "stuff_classes": stuff_classes,
+        "stuff_colors": stuff_colors,
+    }
     # Convert category id for training:
     #   category id: like semantic segmentation, it is the class id for each
     #   pixel. Since there are some classes not used in evaluation, the category
@@ -172,7 +172,7 @@ def load_coco_panoptic_json(json_file, image_dir, gt_dir, semseg_dir, caption_fi
 def register_coco_panoptic_annos_caption_grounding_sem_seg(
     name, metadata, image_root, panoptic_root, panoptic_json, sem_seg_root, caption_root, grounding_root, similarity_pth, instances_json
 ):
-    panoptic_name = '_'.join(name.split('_')[0:4])
+    panoptic_name = '_'.join(name.split('_')[:4])
     delattr(MetadataCatalog.get(panoptic_name), "thing_classes")
     delattr(MetadataCatalog.get(panoptic_name), "thing_colors")
     MetadataCatalog.get(panoptic_name).set(
@@ -180,9 +180,9 @@ def register_coco_panoptic_annos_caption_grounding_sem_seg(
         thing_colors=metadata["thing_colors"],
         # thing_dataset_id_to_contiguous_id=metadata["thing_dataset_id_to_contiguous_id"],
     )
-    
+
     # the name is "coco_2017_train_panoptic_with_sem_seg" and "coco_2017_val_panoptic_with_sem_seg"
-    semantic_name = name + "_with_sem_seg_caption_grounding"
+    semantic_name = f"{name}_with_sem_seg_caption_grounding"
     DatasetCatalog.register(
         semantic_name,
         lambda: load_coco_panoptic_json(panoptic_json, image_root, panoptic_root, sem_seg_root, caption_root, grounding_root, metadata),
@@ -207,7 +207,7 @@ def register_all_coco_panoptic_annos_caption_grounding_sem_seg(root):
         prefix,
         (panoptic_root, panoptic_json, semantic_root, caption_root, grounding_root, similarity_pth),
     ) in _PREDEFINED_SPLITS_COCO_PANOPTIC_CAPTION.items():
-        prefix_instances = '_'.join(prefix.split('_')[0:3])
+        prefix_instances = '_'.join(prefix.split('_')[:3])
         instances_meta = MetadataCatalog.get(prefix_instances)
         image_root, instances_json = instances_meta.image_root, instances_meta.json_file
         # image_root = image_root.replace('datasets', root)

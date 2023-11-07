@@ -83,23 +83,45 @@ class IMaskDINOHead(nn.Module):
     def forward_decoder(self, features, mask=None,targets=None, target_queries=None, target_vlp=None, prediction_switch=None, task='seg', extra={}):
         assert self.processed_features is not None, "need to precess features first"
         mask_features, transformer_encoder_features, multi_scale_features = self.processed_features
-        if task == 'teacher':
-            predictions = self.predictor.forward_teacher(multi_scale_features, mask_features, mask, targets=targets,
-                                                         target_queries=target_queries, target_vlp=target_vlp,
-                                                         task=task, extra=extra)
-        else:
-            predictions = self.predictor(multi_scale_features, mask_features, mask, targets=targets,
-                                         target_queries=target_queries, target_vlp=target_vlp, task=task, extra=extra)
-        return predictions
+        return (
+            self.predictor.forward_teacher(
+                multi_scale_features,
+                mask_features,
+                mask,
+                targets=targets,
+                target_queries=target_queries,
+                target_vlp=target_vlp,
+                task=task,
+                extra=extra,
+            )
+            if task == 'teacher'
+            else self.predictor(
+                multi_scale_features,
+                mask_features,
+                mask,
+                targets=targets,
+                target_queries=target_queries,
+                target_vlp=target_vlp,
+                task=task,
+                extra=extra,
+            )
+        )
 
     def forward(self, features, mask=None, targets=None, target_queries=None, target_vlp=None, task='seg', extra={}):
         return self.layers(features, mask, targets=targets, target_queries=target_queries, target_vlp=target_vlp, task=task, extra=extra)
 
     def layers(self, features, mask=None,targets=None, target_queries=None, target_vlp=None, prediction_switch=None, task='seg', extra={}):
         mask_features, transformer_encoder_features, multi_scale_features = self.pixel_decoder.forward_features(features, mask)
-        predictions = self.predictor(multi_scale_features, mask_features, mask, targets=targets,
-                                         target_queries=target_queries, target_vlp=target_vlp, task=task, extra=extra)
-        return predictions
+        return self.predictor(
+            multi_scale_features,
+            mask_features,
+            mask,
+            targets=targets,
+            target_queries=target_queries,
+            target_vlp=target_vlp,
+            task=task,
+            extra=extra,
+        )
 
 
 @register_body

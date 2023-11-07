@@ -63,7 +63,7 @@ class JointLoader(torchdata.IterableDataset):
     def __init__(self, loaders, key_dataset):
         dataset_names = []
         for key, loader in loaders.items():
-            name = "{}".format(key.split('_')[0])
+            name = f"{key.split('_')[0]}"
             setattr(self, name, loader)
             dataset_names += [name]
         self.dataset_names = dataset_names
@@ -130,10 +130,10 @@ def get_detection_dataset_dicts(
     if isinstance(dataset_names, str):
         dataset_names = [dataset_names]
     assert len(dataset_names)
-    
+
     dataset_dicts = [DatasetCatalog.get(dataset_name) for dataset_name in dataset_names]
     for dataset_name, dicts in zip(dataset_names, dataset_dicts):
-        assert len(dicts), "Dataset '{}' is empty!".format(dataset_name)
+        assert len(dicts), f"Dataset '{dataset_name}' is empty!"
 
     if proposal_files is not None:
         assert len(dataset_names) == len(proposal_files)
@@ -149,7 +149,7 @@ def get_detection_dataset_dicts(
     if filter_empty and has_instances:
         dataset_dicts = filter_images_with_only_crowd_annotations(dataset_dicts, dataset_names)
 
-    assert len(dataset_dicts), "No valid data found in {}.".format(",".join(dataset_names))
+    assert len(dataset_dicts), f'No valid data found in {",".join(dataset_names)}.'
     return dataset_dicts
 
 
@@ -237,9 +237,8 @@ def build_detection_test_loader(
         dataset = MapDataset(dataset, mapper)
     if isinstance(dataset, torchdata.IterableDataset):
         assert sampler is None, "sampler must be None if dataset is IterableDataset"
-    else:
-        if sampler is None:
-            sampler = InferenceSampler(len(dataset))
+    elif sampler is None:
+        sampler = InferenceSampler(len(dataset))
     return torchdata.DataLoader(
         dataset,
         batch_size=batch_size,
@@ -251,10 +250,10 @@ def build_detection_test_loader(
 
 
 def _train_loader_from_config(cfg, dataset_name, mapper, *, dataset=None, sampler=None):
-    cfg_datasets = cfg['DATASETS']
     cfg_dataloader = cfg['DATALOADER']
-    
+
     if dataset is None:
+        cfg_datasets = cfg['DATASETS']
         dataset = get_detection_dataset_dicts(
             dataset_name,
             filter_empty=cfg_dataloader['FILTER_EMPTY_ANNOTATIONS'],
@@ -267,7 +266,7 @@ def _train_loader_from_config(cfg, dataset_name, mapper, *, dataset=None, sample
     if sampler is None:
         sampler_name = cfg_dataloader['SAMPLER_TRAIN']
         logger = logging.getLogger(__name__)
-        logger.info("Using training sampler {}".format(sampler_name))
+        logger.info(f"Using training sampler {sampler_name}")
         sampler = TrainingSampler(len(dataset))
 
     return {
@@ -396,81 +395,68 @@ def build_eval_dataloader(cfg, ):
             mapper = None
         if dataset_name == 'pascal_part_val_interactive':
             mapper = PascalInstanceNewBaselineDatasetMapper(cfg, True)
-            # dataloaders += [build_custom_test_loader(cfg, dataset_name, mapper=mapper)]
-            dataloaders += [build_detection_test_loader(cfg, dataset_name, mapper=mapper)]
-        else:
-            dataloaders += [build_detection_test_loader(cfg, dataset_name, mapper=mapper)]
+        # dataloaders += [build_custom_test_loader(cfg, dataset_name, mapper=mapper)]
+        dataloaders += [build_detection_test_loader(cfg, dataset_name, mapper=mapper)]
     return dataloaders
 
 
 def build_train_dataloader(cfg, ):
     dataset_names = cfg['DATASETS']['TRAIN']
-    
+
     loaders = {}
     cfg = copy.deepcopy(cfg)
     for dataset_name in dataset_names:
         cfg = get_config_from_name(cfg, dataset_name)
         mapper_name = cfg['INPUT']['DATASET_MAPPER_NAME']
         # Sam data dataset mapper
-        if mapper_name == "sam":
-            # print("using SamBaselineDatasetMapperJSON")
-            # mapper = SamBaselineDatasetMapperJSON(cfg, True)
-            mapper = SamBaselineDatasetMapper(cfg, True)
-            loaders['sam'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
-        elif mapper_name == "pascal_part":
+        if mapper_name == "coco_instance_lsj":
+            mapper = COCOInstanceNewBaselineDatasetMapper(cfg, True)
+            loaders['coco'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
+        elif mapper_name == "coco_interactive_panoptic_lsj":
+            mapper = COCOInteractivePanopticNewBaselineDatasetMapper(cfg, True)
+            loaders['coco'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
+        elif mapper_name == "coco_panoptic_lsj":
+            mapper = COCOPanopticNewBaselineDatasetMapper(cfg, True)
+            loaders['coco'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
+        elif mapper_name == "mask_former_instance":
             mapper = MaskFormerInstanceDatasetMapper(cfg, True)
-            loaders['pascal'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
-        # pascal_part dataset mapper
-        elif mapper_name == "pascal_part_lsj":
-            mapper = PascalInstanceNewBaselineDatasetMapper(cfg, True)
-            loaders['pascal'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
-        # shared part dataset mapper
+            loaders['coco'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
+        elif mapper_name == "mask_former_panoptic":
+            mapper = MaskFormerPanopticDatasetMapper(cfg, True)
+            loaders['ade'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
+        elif mapper_name == "mask_former_panoptic_interactive":
+            mapper = MaskFormerPanopticDatasetMapperInteractive(cfg, True, dataset_name=dataset_name)
+            loaders['ade'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
+        elif mapper_name == "mask_former_semantic":
+            mapper = MaskFormerSemanticDatasetMapper(cfg, True)
+            loaders['coco'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
+        elif mapper_name == "object365":
+            mapper = O365InstanceNewBaselineDatasetMapper(cfg, True)  # Use lsj instance mapper for o365
+            loaders['o365'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
         elif mapper_name == "part_all_filter_whole_lsj":
             mapper = PartFilterWholeInstanceNewBaselineDatasetMapper(cfg, True,dataset_name=dataset_name)
             # FIXME shared loader for all part data
             name = dataset_name.split('_')[0]
             loaders[name] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
-        # Semantic segmentation dataset mapper
-        elif mapper_name == "mask_former_semantic":
-            mapper = MaskFormerSemanticDatasetMapper(cfg, True)
-            loaders['coco'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
-        # Panoptic segmentation dataset mapper
-        elif mapper_name == "mask_former_panoptic":   # TODO: Hack for ade training; should add ade name
-            mapper = MaskFormerPanopticDatasetMapper(cfg, True)
-            loaders['ade'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
-        # Instance segmentation dataset mapper
-        elif mapper_name == "mask_former_instance":
+        elif mapper_name == "pascal_part":
             mapper = MaskFormerInstanceDatasetMapper(cfg, True)
-            loaders['coco'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
-        # coco instance segmentation lsj new baseline
-        elif mapper_name == "coco_instance_lsj":
-            mapper = COCOInstanceNewBaselineDatasetMapper(cfg, True)
-            loaders['coco'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
-        # coco panoptic segmentation lsj new baseline
-        elif mapper_name == "coco_panoptic_lsj":
-            mapper = COCOPanopticNewBaselineDatasetMapper(cfg, True)
-            loaders['coco'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
-        elif mapper_name == "coco_interactive_panoptic_lsj":  # FIXME filter empty instances
-            mapper = COCOInteractivePanopticNewBaselineDatasetMapper(cfg, True)
-            loaders['coco'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
-        elif mapper_name == "mask_former_panoptic_interactive":  # FIXME filter empty instances
-            mapper = MaskFormerPanopticDatasetMapperInteractive(cfg, True, dataset_name=dataset_name)
-            loaders['ade'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
-        elif mapper_name == "object365":
-            mapper = O365InstanceNewBaselineDatasetMapper(cfg, True)  # Use lsj instance mapper for o365
-            loaders['o365'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
+            loaders['pascal'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
+        elif mapper_name == "pascal_part_lsj":
+            mapper = PascalInstanceNewBaselineDatasetMapper(cfg, True)
+            loaders['pascal'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
+        elif mapper_name == "sam":
+            # print("using SamBaselineDatasetMapperJSON")
+            # mapper = SamBaselineDatasetMapperJSON(cfg, True)
+            mapper = SamBaselineDatasetMapper(cfg, True)
+            loaders['sam'] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
         else:
             mapper = None
             loaders[dataset_name] = build_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
-    # import ipdb; ipdb.set_trace()
-    if len(loaders) == 1 and not cfg['LOADER'].get('JOINT', False):
-        for k, v in loaders.items():
-            print("number of iterations per epoch: ", v, len(loaders[k]))
-        return list(loaders.values())[0]
-        # return loaders.values()['coco']
-        # return loaders['coco']
-    else:
+    if len(loaders) != 1 or cfg['LOADER'].get('JOINT', False):
         return JointLoader(loaders, key_dataset=cfg['LOADER'].get('KEY_DATASET', 'coco'))
+    for k, v in loaders.items():
+        print("number of iterations per epoch: ", v, len(loaders[k]))
+    return list(loaders.values())[0]
 
     
 def build_evaluator(cfg, dataset_name, output_folder=None):
@@ -571,17 +557,15 @@ def build_evaluator(cfg, dataset_name, output_folder=None):
     if evaluator_type == "lvis":
         return LVISEvaluator(dataset_name, output_dir=output_folder)
 
-    if len(evaluator_list) == 0:
+    if not evaluator_list:
         raise NotImplementedError(
-            "no Evaluator for the dataset {} with the type {}".format(
-                dataset_name, evaluator_type
-            )
+            f"no Evaluator for the dataset {dataset_name} with the type {evaluator_type}"
         )
     elif len(evaluator_list) == 1:
         return evaluator_list[0]
 
 
-    
+
     return DatasetEvaluators(evaluator_list)
 
 

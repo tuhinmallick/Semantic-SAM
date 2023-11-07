@@ -136,7 +136,7 @@ class LanguageEncoder(nn.Module):
         ret = {"tokens": tokens,
                 "token_emb": token_emb,
                 "class_emb": class_emb,}
-        setattr(self, '{}_token_embeddings'.format(name), ret)
+        setattr(self, f'{name}_token_embeddings', ret)
         return ret
 
     def forward_language(self, texts, norm=True):
@@ -175,9 +175,8 @@ class LanguageEncoder(nn.Module):
         if fake:
             return None
         v_emb = v_emb / (v_emb.norm(dim=-1, keepdim=True) + 1e-7)
-        t_emb = getattr(self, '{}_text_embeddings'.format(name))
-        output = self.logit_scale.exp() * v_emb @ t_emb.unsqueeze(0).transpose(1, 2)
-        return output
+        t_emb = getattr(self, f'{name}_text_embeddings')
+        return self.logit_scale.exp() * v_emb @ t_emb.unsqueeze(0).transpose(1, 2)
 
 
 @register_model

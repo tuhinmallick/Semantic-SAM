@@ -33,8 +33,7 @@ def batch_dice_loss(inputs: torch.Tensor, targets: torch.Tensor):
     inputs = inputs.flatten(1)
     numerator = 2 * torch.einsum("nc,mc->nm", inputs, targets)
     denominator = inputs.sum(-1)[:, None] + targets.sum(-1)[None, :]
-    loss = 1 - (numerator + 1) / (denominator + 1)
-    return loss
+    return 1 - (numerator + 1) / (denominator + 1)
 
 
 batch_dice_loss_jit = torch.jit.script(
@@ -111,6 +110,9 @@ class HungarianMatcher(nn.Module):
 
         indices = []
 
+        # focal loss
+        alpha = 0.25
+        gamma = 2.0
         # Iterate through batch size
         for b in range(bs):
             out_bbox = outputs["pred_boxes"][b]
@@ -124,9 +126,6 @@ class HungarianMatcher(nn.Module):
 
             out_prob = outputs["pred_logits"][b].sigmoid()  # [num_queries, num_classes]
             tgt_ids = targets[b]["labels"]
-            # focal loss
-            alpha = 0.25
-            gamma = 2.0
             neg_cost_class = (1 - alpha) * (out_prob ** gamma) * (-(1 - out_prob + 1e-6).log())
             pos_cost_class = alpha * ((1 - out_prob) ** gamma) * (-(out_prob + 1e-6).log())
             cost_class = pos_cost_class[:, tgt_ids] - neg_cost_class[:, tgt_ids]
@@ -168,7 +167,7 @@ class HungarianMatcher(nn.Module):
             else:
                 cost_mask = torch.tensor(0).to(out_bbox)
                 cost_dice = torch.tensor(0).to(out_bbox)
-            
+
             # Final cost matrix
             if self.panoptic_on:
                 isthing = tgt_ids<80
@@ -216,14 +215,14 @@ class HungarianMatcher(nn.Module):
         if mode == 'default':
             return self.memory_efficient_forward(outputs, targets, cost)
         else:
-            assert False, "Mode {} is not supported.".format(mode)
+            assert False, f"Mode {mode} is not supported."
 
     def __repr__(self, _repr_indent=4):
-        head = "Matcher " + self.__class__.__name__
+        head = f"Matcher {self.__class__.__name__}"
         body = [
-            "cost_class: {}".format(self.cost_class),
-            "cost_mask: {}".format(self.cost_mask),
-            "cost_dice: {}".format(self.cost_dice),
+            f"cost_class: {self.cost_class}",
+            f"cost_mask: {self.cost_mask}",
+            f"cost_dice: {self.cost_dice}",
         ]
         lines = [head] + [" " * _repr_indent + line for line in body]
         return "\n".join(lines)

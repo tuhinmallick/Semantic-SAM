@@ -60,8 +60,7 @@ class MSDeformAttnTransformerEncoderOnly(nn.Module):
         valid_W = torch.sum(~mask[:, 0, :], 1)
         valid_ratio_h = valid_H.float() / H
         valid_ratio_w = valid_W.float() / W
-        valid_ratio = torch.stack([valid_ratio_w, valid_ratio_h], -1)
-        return valid_ratio
+        return torch.stack([valid_ratio_w, valid_ratio_h], -1)
 
     def forward(self, srcs, masks, pos_embeds, use_ckpt=False):
 
@@ -166,12 +165,27 @@ class MSDeformAttnTransformerEncoder(nn.Module):
     def forward(self, src, spatial_shapes, level_start_index, valid_ratios, pos=None, padding_mask=None, use_ckpt=False):
         output = src
         reference_points = self.get_reference_points(spatial_shapes, valid_ratios, device=src.device)
-        for _, layer in enumerate(self.layers):
-            if use_ckpt:
-                output = checkpoint.checkpoint(layer,output, pos, reference_points, spatial_shapes, level_start_index, padding_mask)
-            else:
-                output = layer(output, pos, reference_points, spatial_shapes, level_start_index, padding_mask)
-
+        for layer in self.layers:
+            output = (
+                checkpoint.checkpoint(
+                    layer,
+                    output,
+                    pos,
+                    reference_points,
+                    spatial_shapes,
+                    level_start_index,
+                    padding_mask,
+                )
+                if use_ckpt
+                else layer(
+                    output,
+                    pos,
+                    reference_points,
+                    spatial_shapes,
+                    level_start_index,
+                    padding_mask,
+                )
+            )
         return output
 
 
@@ -316,8 +330,8 @@ class MaskDINOEncoder(nn.Module):
             )
             weight_init.c2_xavier_fill(lateral_conv)
             weight_init.c2_xavier_fill(output_conv)
-            self.add_module("adapter_{}".format(idx + 1), lateral_conv)
-            self.add_module("layer_{}".format(idx + 1), output_conv)
+            self.add_module(f"adapter_{idx + 1}", lateral_conv)
+            self.add_module(f"layer_{idx + 1}", output_conv)
 
             lateral_convs.append(lateral_conv)
             output_convs.append(output_conv)
@@ -331,26 +345,26 @@ class MaskDINOEncoder(nn.Module):
         enc_cfg = cfg['MODEL']['ENCODER']
         dec_cfg = cfg['MODEL']['DECODER']
 
-        ret = {}
-        ret["input_shape"] = {
-            k: v for k, v in input_shape.items() if k in enc_cfg['IN_FEATURES']
+        return {
+            "input_shape": {
+                k: v for k, v in input_shape.items() if k in enc_cfg['IN_FEATURES']
+            },
+            "conv_dim": enc_cfg['CONVS_DIM'],
+            "mask_dim": enc_cfg['MASK_DIM'],
+            "norm": enc_cfg['NORM'],
+            "transformer_dropout": dec_cfg['DROPOUT'],
+            "transformer_nheads": dec_cfg['NHEADS'],
+            "transformer_dim_feedforward": dec_cfg['DIM_FEEDFORWARD'],
+            "transformer_enc_layers": enc_cfg['TRANSFORMER_ENC_LAYERS'],
+            "transformer_in_features": enc_cfg[
+                'DEFORMABLE_TRANSFORMER_ENCODER_IN_FEATURES'
+            ],
+            "common_stride": enc_cfg['COMMON_STRIDE'],
+            "total_num_feature_levels": enc_cfg['TOTAL_NUM_FEATURE_LEVELS'],
+            "num_feature_levels": enc_cfg['NUM_FEATURE_LEVELS'],
+            "feature_order": enc_cfg['FEATURE_ORDER'],
+            "use_ckpt": enc_cfg.get('USE_CKPT', False),
         }
-        ret["conv_dim"] = enc_cfg['CONVS_DIM']
-        ret["mask_dim"] = enc_cfg['MASK_DIM']
-        ret["norm"] = enc_cfg['NORM']
-        ret["transformer_dropout"] = dec_cfg['DROPOUT']
-        ret["transformer_nheads"] = dec_cfg['NHEADS']
-        ret["transformer_dim_feedforward"] = dec_cfg['DIM_FEEDFORWARD']  # deformable transformer encoder
-        ret[
-            "transformer_enc_layers"
-        ] = enc_cfg['TRANSFORMER_ENC_LAYERS']  # a separate config
-        ret["transformer_in_features"] = enc_cfg['DEFORMABLE_TRANSFORMER_ENCODER_IN_FEATURES']  # ['res3', 'res4', 'res5']
-        ret["common_stride"] = enc_cfg['COMMON_STRIDE']
-        ret["total_num_feature_levels"] = enc_cfg['TOTAL_NUM_FEATURE_LEVELS']
-        ret["num_feature_levels"] = enc_cfg['NUM_FEATURE_LEVELS']
-        ret["feature_order"] = enc_cfg['FEATURE_ORDER']
-        ret["use_ckpt"] = enc_cfg.get('USE_CKPT', False)
-        return ret
 
     @autocast(enabled=False)
     def forward_features(self, features, masks):
@@ -397,12 +411,14 @@ class MaskDINOEncoder(nn.Module):
                 split_size_or_sections[i] = y.shape[1] - level_start_index[i]
         y = torch.split(y, split_size_or_sections, dim=1)
 
-        out = []
         multi_scale_features = []
         num_cur_levels = 0
-        for i, z in enumerate(y):
-            out.append(z.transpose(1, 2).view(bs, -1, spatial_shapes[i][0], spatial_shapes[i][1]))
-
+        out = [
+            z.transpose(1, 2).view(
+                bs, -1, spatial_shapes[i][0], spatial_shapes[i][1]
+            )
+            for i, z in enumerate(y)
+        ]
         # append `out` with extra FPN levels
         # Reverse feature maps into top-down order (from low to high resolution)
         for idx, f in enumerate(self.in_features[:self.num_fpn_levels][::-1]):

@@ -32,11 +32,11 @@ def convert_coco_poly_to_mask(segmentations, height, width):
         mask = torch.as_tensor(mask, dtype=torch.uint8)
         mask = mask.any(dim=2)
         masks.append(mask)
-    if masks:
-        masks = torch.stack(masks, dim=0)
-    else:
-        masks = torch.zeros((0, height, width), dtype=torch.uint8)
-    return masks
+    return (
+        torch.stack(masks, dim=0)
+        if masks
+        else torch.zeros((0, height, width), dtype=torch.uint8)
+    )
 
 
 def build_transform_gen(cfg, is_train):
@@ -106,7 +106,7 @@ class O365InstanceNewBaselineDatasetMapper:
         """
         self.tfm_gens = tfm_gens
         logging.getLogger(__name__).info(
-            "[COCOInstanceNewBaselineDatasetMapper] Full TransformGens used in training: {}".format(str(self.tfm_gens))
+            f"[COCOInstanceNewBaselineDatasetMapper] Full TransformGens used in training: {str(self.tfm_gens)}"
         )
 
         self.img_format = image_format
@@ -117,12 +117,11 @@ class O365InstanceNewBaselineDatasetMapper:
         # Build augmentation
         tfm_gens = build_transform_gen(cfg, is_train)
 
-        ret = {
+        return {
             "is_train": is_train,
             "tfm_gens": tfm_gens,
             "image_format": cfg['INPUT']['FORMAT'],
         }
-        return ret
 
     def __call__(self, dataset_dict):
         """

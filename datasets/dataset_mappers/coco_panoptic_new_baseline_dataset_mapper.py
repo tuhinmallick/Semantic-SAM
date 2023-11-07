@@ -85,9 +85,7 @@ class COCOPanopticNewBaselineDatasetMapper:
         """
         self.tfm_gens = tfm_gens
         logging.getLogger(__name__).info(
-            "[COCOPanopticNewBaselineDatasetMapper] Full TransformGens used in training: {}".format(
-                str(self.tfm_gens)
-            )
+            f"[COCOPanopticNewBaselineDatasetMapper] Full TransformGens used in training: {str(self.tfm_gens)}"
         )
 
         self.img_format = image_format
@@ -98,12 +96,11 @@ class COCOPanopticNewBaselineDatasetMapper:
         # Build augmentation
         tfm_gens = build_transform_gen(cfg, is_train)
 
-        ret = {
+        return {
             "is_train": is_train,
             "tfm_gens": tfm_gens,
             "image_format": cfg.INPUT.FORMAT,
         }
-        return ret
 
     def __call__(self, dataset_dict):
         """
@@ -145,14 +142,14 @@ class COCOPanopticNewBaselineDatasetMapper:
             classes = []
             masks = []
             for segment_info in segments_info:
-                class_id = segment_info["category_id"]
                 if not segment_info["iscrowd"]:
+                    class_id = segment_info["category_id"]
                     classes.append(class_id)
                     masks.append(pan_seg_gt == segment_info["id"])
 
             classes = np.array(classes)
             instances.gt_classes = torch.tensor(classes, dtype=torch.int64)
-            if len(masks) == 0:
+            if not masks:
                 # Some image does not have annotation (all ignored)
                 instances.gt_masks = torch.zeros((0, pan_seg_gt.shape[-2], pan_seg_gt.shape[-1]))
                 instances.gt_boxes = Boxes(torch.zeros((0, 4)))

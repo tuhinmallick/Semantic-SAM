@@ -180,8 +180,6 @@ class CoCoInferenceDatasetMapper:
                 dataset_dict, image_shape, transforms, proposal_topk=self.proposal_topk
             )
 
-        # if not self.is_train:
-            # USER: Modify this if you want to keep them for some reason.
         # dataset_dict.pop("annotations", None)
         # dataset_dict.pop("sem_seg_file_name", None)
         # return dataset_dict
@@ -200,14 +198,14 @@ class CoCoInferenceDatasetMapper:
             classes = []
             masks = []
             for segment_info in segments_info:
-                class_id = segment_info["category_id"]
                 if not segment_info["iscrowd"]:
+                    class_id = segment_info["category_id"]
                     classes.append(class_id)
                     masks.append(pan_seg_gt == segment_info["id"])
 
             classes = np.array(classes)
             instances.gt_classes = torch.tensor(classes, dtype=torch.int64)
-            if len(masks) == 0:
+            if not masks:
                 # Some image does not have annotation (all ignored)
                 instances.gt_masks = torch.zeros((0, pan_seg_gt.shape[-2], pan_seg_gt.shape[-1]))
                 instances.gt_boxes = Boxes(torch.zeros((0, 4)))
@@ -219,7 +217,7 @@ class CoCoInferenceDatasetMapper:
                 instances.gt_boxes = masks.get_bounding_boxes()
 
             dataset_dict["instances"] = instances
-            # dataset_dict["instances"] = filter_empty_instances_by_box(instances)
+                # dataset_dict["instances"] = filter_empty_instances_by_box(instances)
 
         if "annotations" in dataset_dict:
             self._transform_annotations(dataset_dict, transforms, image_shape)

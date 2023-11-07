@@ -57,20 +57,18 @@ class ImageNetDatasetMapper:
         self.size_test = size_test
         self.size_crop = size_crop
 
-        t = []
-        t.append(transforms.Resize(size_crop, interpolation=Image.BICUBIC))
+        t = [transforms.Resize(size_crop, interpolation=Image.BICUBIC)]
         t.append(transforms.CenterCrop(size_test))
         self.transform = transforms.Compose(t)
         
     @classmethod
     def from_config(cls, cfg, is_train=True):
-        ret = {
+        return {
             "is_train": is_train,
             "size_train": cfg['INPUT']['SIZE_TRAIN'],
             "size_test": cfg['INPUT']['SIZE_TEST'],
-            "size_crop": cfg['INPUT']['SIZE_CROP']
+            "size_crop": cfg['INPUT']['SIZE_CROP'],
         }
-        return ret
 
     def __call__(self, dataset_dict):
         """

@@ -19,8 +19,7 @@ from .automatic_mask_generator import SemanticSamAutomaticMaskGenerator
 metadata = MetadataCatalog.get('coco_2017_train_panoptic')
 
 def interactive_infer_image(model, image,level,all_classes,all_parts, thresh,text_size,hole_scale,island_scale,semantic, refimg=None, reftxt=None, audio_pth=None, video_pth=None):
-    t = []
-    t.append(transforms.Resize(int(text_size), interpolation=Image.BICUBIC))
+    t = [transforms.Resize(int(text_size), interpolation=Image.BICUBIC)]
     transform1 = transforms.Compose(t)
     image_ori = transform1(image)
 
@@ -40,8 +39,9 @@ def interactive_infer_image(model, image,level,all_classes,all_parts, thresh,tex
     plt.imshow(image_ori)
     show_anns(outputs)
     fig.canvas.draw()
-    im=Image.frombytes('RGB', fig.canvas.get_width_height(), fig.canvas.tostring_rgb())
-    return im
+    return Image.frombytes(
+        'RGB', fig.canvas.get_width_height(), fig.canvas.tostring_rgb()
+    )
 
 
 def remove_small_regions(
@@ -53,19 +53,19 @@ def remove_small_regions(
     """
     import cv2  # type: ignore
 
-    assert mode in ["holes", "islands"]
+    assert mode in {"holes", "islands"}
     correct_holes = mode == "holes"
     working_mask = (correct_holes ^ mask).astype(np.uint8)
     n_labels, regions, stats, _ = cv2.connectedComponentsWithStats(working_mask, 8)
     sizes = stats[:, -1][1:]  # Row 0 is background label
     small_regions = [i + 1 for i, s in enumerate(sizes) if s < area_thresh]
-    if len(small_regions) == 0:
+    if not small_regions:
         return mask, False
     fill_labels = [0] + small_regions
     if not correct_holes:
         fill_labels = [i for i in range(n_labels) if i not in fill_labels]
         # If every region is below threshold, keep largest
-        if len(fill_labels) == 0:
+        if not fill_labels:
             fill_labels = [int(np.argmax(sizes)) + 1]
     mask = np.isin(regions, fill_labels)
     return mask, True

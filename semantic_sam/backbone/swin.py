@@ -56,8 +56,11 @@ def window_partition(x, window_size):
     """
     B, H, W, C = x.shape
     x = x.view(B, H // window_size, window_size, W // window_size, window_size, C)
-    windows = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, window_size, window_size, C)
-    return windows
+    return (
+        x.permute(0, 1, 3, 2, 4, 5)
+        .contiguous()
+        .view(-1, window_size, window_size, C)
+    )
 
 
 def window_reverse(windows, window_size, H, W):
@@ -149,7 +152,7 @@ class WindowAttention(nn.Module):
 
         q = q * self.scale
         attn = q @ k.transpose(-2, -1)
-        
+
         relative_position_bias = self.relative_position_bias_table[
             self.relative_position_index.view(-1)
         ].view(
@@ -164,10 +167,7 @@ class WindowAttention(nn.Module):
             nW = mask.shape[0]
             attn = attn.view(B_ // nW, nW, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0)
             attn = attn.view(-1, self.num_heads, N, N)
-            attn = self.softmax(attn)
-        else:
-            attn = self.softmax(attn)
-
+        attn = self.softmax(attn)
         attn = self.attn_drop(attn)
 
         x = (attn @ v).transpose(1, 2).reshape(B_, N, C)
@@ -446,22 +446,23 @@ class BasicLayer(nn.Module):
         )  # nW, window_size, window_size, 1
         mask_windows = mask_windows.view(-1, self.window_size * self.window_size)
         attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
-        attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-100.0)).masked_fill(
-            attn_mask == 0, float(0.0)
-        ).type(x.dtype)
-        
+        attn_mask = (
+            attn_mask.masked_fill(attn_mask != 0, -100.0)
+            .masked_fill(attn_mask == 0, 0.0)
+            .type(x.dtype)
+        )
+
         for blk in self.blocks:
             blk.H, blk.W = H, W
             if self.use_checkpoint:
                 x = checkpoint.checkpoint(blk, x, attn_mask)
             else:
                 x = blk(x, attn_mask)
-        if self.downsample is not None:
-            x_down = self.downsample(x, H, W)
-            Wh, Ww = (H + 1) // 2, (W + 1) // 2
-            return x, H, W, x_down, Wh, Ww
-        else:
+        if self.downsample is None:
             return x, H, W, x, H, W
+        x_down = self.downsample(x, H, W)
+        Wh, Ww = (H + 1) // 2, (W + 1) // 2
+        return x, H, W, x_down, Wh, Ww
 
 
 class PatchEmbed(nn.Module):
@@ -482,10 +483,7 @@ class PatchEmbed(nn.Module):
         self.embed_dim = embed_dim
 
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
-        if norm_layer is not None:
-            self.norm = norm_layer(embed_dim)
-        else:
-            self.norm = None
+        self.norm = norm_layer(embed_dim) if norm_layer is not None else None
 
     def forward(self, x):
         """Forward function."""
@@ -688,19 +686,15 @@ class SwinTransformer(nn.Module):
                     L2, nH2 = relative_position_bias_table_current.size()
                     if nH1 != nH2:
                         logger.info(f"Error in loading {k}, passing")
-                    else:
-                        if L1 != L2:
-                            logger.info(
-                                '=> load_pretrained: resized variant: {} to {}'
-                                    .format((L1, nH1), (L2, nH2))
-                            )
-                            S1 = int(L1 ** 0.5)
-                            S2 = int(L2 ** 0.5)
-                            relative_position_bias_table_pretrained_resized = torch.nn.functional.interpolate(
-                                relative_position_bias_table_pretrained.permute(1, 0).view(1, nH1, S1, S1),
-                                size=(S2, S2),
-                                mode='bicubic')
-                            v = relative_position_bias_table_pretrained_resized.view(nH2, L2).permute(1, 0)
+                    elif L1 != L2:
+                        logger.info(f'=> load_pretrained: resized variant: {(L1, nH1)} to {(L2, nH2)}')
+                        S1 = int(L1 ** 0.5)
+                        S2 = int(L2 ** 0.5)
+                        relative_position_bias_table_pretrained_resized = torch.nn.functional.interpolate(
+                            relative_position_bias_table_pretrained.permute(1, 0).view(1, nH1, S1, S1),
+                            size=(S2, S2),
+                            mode='bicubic')
+                        v = relative_position_bias_table_pretrained_resized.view(nH2, L2).permute(1, 0)
 
                 if 'absolute_pos_embed' in k and v.size() != model_dict[k].size():
                     absolute_pos_embed_pretrained = v
@@ -709,19 +703,17 @@ class SwinTransformer(nn.Module):
                     _, L2, C2 = absolute_pos_embed_current.size()
                     if C1 != C1:
                         logger.info(f"Error in loading {k}, passing")
-                    else:
-                        if L1 != L2:
-                            logger.info(
-                                '=> load_pretrained: resized variant: {} to {}'
-                                    .format((1, L1, C1), (1, L2, C2))
-                            )
-                            S1 = int(L1 ** 0.5)
-                            S2 = int(L2 ** 0.5)
-                            absolute_pos_embed_pretrained = absolute_pos_embed_pretrained.reshape(-1, S1, S1, C1)
-                            absolute_pos_embed_pretrained = absolute_pos_embed_pretrained.permute(0, 3, 1, 2)
-                            absolute_pos_embed_pretrained_resized = torch.nn.functional.interpolate(
-                                absolute_pos_embed_pretrained, size=(S2, S2), mode='bicubic')
-                            v = absolute_pos_embed_pretrained_resized.permute(0, 2, 3, 1).flatten(1, 2)
+                    elif L1 != L2:
+                        logger.info(
+                            f'=> load_pretrained: resized variant: {(1, L1, C1)} to {(1, L2, C2)}'
+                        )
+                        S1 = int(L1 ** 0.5)
+                        S2 = int(L2 ** 0.5)
+                        absolute_pos_embed_pretrained = absolute_pos_embed_pretrained.reshape(-1, S1, S1, C1)
+                        absolute_pos_embed_pretrained = absolute_pos_embed_pretrained.permute(0, 3, 1, 2)
+                        absolute_pos_embed_pretrained_resized = torch.nn.functional.interpolate(
+                            absolute_pos_embed_pretrained, size=(S2, S2), mode='bicubic')
+                        v = absolute_pos_embed_pretrained_resized.permute(0, 2, 3, 1).flatten(1, 2)
 
                 need_init_state_dict[k] = v
         self.load_state_dict(need_init_state_dict, strict=False)
@@ -752,11 +744,11 @@ class SwinTransformer(nn.Module):
                 x_out = norm_layer(x_out)
 
                 out = x_out.view(-1, H, W, self.num_features[i]).permute(0, 3, 1, 2).contiguous()
-                outs["res{}".format(i + 2)] = out
+                outs[f"res{i + 2}"] = out
 
         if len(self.out_indices) == 0:
             outs["res5"] = x_out.view(-1, H, W, self.num_features[i]).permute(0, 3, 1, 2).contiguous()
-        
+
 
         return outs
 
@@ -817,12 +809,8 @@ class D2SwinTransformer(SwinTransformer, Backbone):
         assert (
             x.dim() == 4
         ), f"SwinTransformer takes an input of shape (N, C, H, W). Got {x.shape} instead!"
-        outputs = {}
         y = super().forward(x)
-        for k in y.keys():
-            if k in self._out_features:
-                outputs[k] = y[k]
-        return outputs
+        return {k: y[k] for k in y.keys() if k in self._out_features}
 
     def output_shape(self):
         feature_names = list(set(self._out_feature_strides.keys()) & set(self._out_features))
